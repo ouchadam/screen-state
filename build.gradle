@@ -1,0 +1,107 @@
+buildscript {
+    apply from: "dependencies.gradle"
+
+    repositories {
+        Dependencies._repositories.call(it)
+    }
+    dependencies {
+        classpath Dependencies.google.androidGradlePlugin
+        classpath Dependencies.mavenCentral.kotlinGradlePlugin
+    }
+}
+
+
+task clean(type: Delete) {
+    delete rootProject.buildDir
+}
+
+ext.applyLibraryPlugins = { project ->
+    project.apply plugin: 'com.android.library'
+    project.apply plugin: 'kotlin-android'
+}
+
+ext.androidSdkVersion = 33
+
+ext.applyCommonAndroidParameters = { project ->
+    def android = project.android
+    android.compileSdk androidSdkVersion
+    android.compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+        incremental = true
+    }
+    android.defaultConfig {
+        minSdkVersion 24
+        targetSdkVersion androidSdkVersion
+    }
+}
+
+ext.applyLibraryModuleOptimisations = { project ->
+    project.android {
+        variantFilter { variant ->
+            if (variant.name == "debug") {
+                variant.ignore = true
+            }
+        }
+
+        buildFeatures {
+            buildConfig = false
+            dataBinding = false
+            aidl = false
+            renderScript = false
+            resValues = false
+            shaders = false
+            viewBinding = false
+        }
+    }
+}
+
+ext.applyCompose = { project ->
+    def dependencies = project.dependencies
+
+    dependencies.implementation Dependencies.google.androidxComposeUi
+    dependencies.implementation Dependencies.google.androidxComposeFoundation
+    dependencies.implementation Dependencies.google.androidxComposeMaterial
+    dependencies.implementation Dependencies.google.androidxComposeIconsExtended
+    dependencies.implementation Dependencies.google.androidxActivityCompose
+
+    def android = project.android
+    android.buildFeatures.compose = true
+    android.composeOptions {
+        kotlinCompilerExtensionVersion = Dependencies.google.kotlinCompilerExtensionVersion
+    }
+}
+
+ext.applyAndroidComposeLibraryModule = { project ->
+    applyAndroidLibraryModule(project)
+    applyCompose(project)
+}
+
+ext.applyAndroidLibraryModule = { project ->
+    applyLibraryPlugins(project)
+    applyCommonAndroidParameters(project)
+    applyLibraryModuleOptimisations(project)
+}
+
+ext.kotlinTest = { dependencies ->
+    dependencies.testImplementation Dependencies.mavenCentral.kluent
+    dependencies.testImplementation Dependencies.mavenCentral.kotlinTest
+    dependencies.testImplementation "org.jetbrains.kotlin:kotlin-test-junit:1.7.20"
+    dependencies.testImplementation Dependencies.mavenCentral.mockk
+    dependencies.testImplementation 'org.jetbrains.kotlinx:kotlinx-coroutines-test:1.6.4'
+
+    dependencies.testImplementation 'org.junit.jupiter:junit-jupiter-api:5.9.1'
+    dependencies.testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.9.1'
+}
+
+ext.kotlinFixtures = { dependencies ->
+    dependencies.testFixturesImplementation Dependencies.mavenCentral.mockk
+    dependencies.testFixturesImplementation Dependencies.mavenCentral.kluent
+    dependencies.testFixturesImplementation Dependencies.mavenCentral.kotlinCoroutinesCore
+}
+
+ext.androidImportFixturesWorkaround = { project, fixtures ->
+    project.dependencies.testImplementation(project.dependencies.testFixtures(fixtures))
+    project.dependencies.testImplementation fixtures.files("build/libs/${fixtures.name}-test-fixtures.jar")
+    project.dependencies.testImplementation fixtures.files("build/libs/${fixtures.name}.jar")
+}

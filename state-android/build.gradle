@@ -1,0 +1,8 @@
+applyAndroidLibraryModule(project)
+
+dependencies {
+    implementation project(":common")
+    api project(":state")
+
+    implementation Dependencies.google.androidxActivityCompose
+}

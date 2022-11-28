@@ -1,0 +1,7 @@
+applyAndroidComposeLibraryModule(project)
+
+dependencies {
+    api project(":common")
+    api project(":state-android")
+    api project(":state-page")
+}
