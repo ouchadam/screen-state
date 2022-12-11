@@ -1,23 +1,5 @@
-buildscript {
-    apply from: "dependencies.gradle"
-
-    repositories {
-        Dependencies._repositories.call(it)
-    }
-    dependencies {
-        classpath Dependencies.google.androidGradlePlugin
-        classpath Dependencies.mavenCentral.kotlinGradlePlugin
-    }
-}
-
-
 task clean(type: Delete) {
     delete rootProject.buildDir
-}
-
-ext.applyLibraryPlugins = { project ->
-    project.apply plugin: 'com.android.library'
-    project.apply plugin: 'kotlin-android'
 }
 
 ext.androidSdkVersion = 33
@@ -59,16 +41,14 @@ ext.applyLibraryModuleOptimisations = { project ->
 ext.applyCompose = { project ->
     def dependencies = project.dependencies
 
-    dependencies.implementation Dependencies.google.androidxComposeUi
-    dependencies.implementation Dependencies.google.androidxComposeFoundation
-    dependencies.implementation Dependencies.google.androidxComposeMaterial
-    dependencies.implementation Dependencies.google.androidxComposeIconsExtended
-    dependencies.implementation Dependencies.google.androidxActivityCompose
+    dependencies.implementation libs.compose.ui
+    dependencies.implementation libs.compose.foundation
+    dependencies.implementation libs.compose.activity
 
     def android = project.android
     android.buildFeatures.compose = true
     android.composeOptions {
-        kotlinCompilerExtensionVersion = Dependencies.google.kotlinCompilerExtensionVersion
+        kotlinCompilerExtensionVersion = libs.versions.compose.compiler.get()
     }
 }
 
@@ -78,30 +58,19 @@ ext.applyAndroidComposeLibraryModule = { project ->
 }
 
 ext.applyAndroidLibraryModule = { project ->
-    applyLibraryPlugins(project)
     applyCommonAndroidParameters(project)
     applyLibraryModuleOptimisations(project)
 }
 
 ext.kotlinTest = { dependencies ->
-    dependencies.testImplementation Dependencies.mavenCentral.kluent
-    dependencies.testImplementation Dependencies.mavenCentral.kotlinTest
-    dependencies.testImplementation "org.jetbrains.kotlin:kotlin-test-junit:1.7.20"
-    dependencies.testImplementation Dependencies.mavenCentral.mockk
-    dependencies.testImplementation 'org.jetbrains.kotlinx:kotlinx-coroutines-test:1.6.4'
-
-    dependencies.testImplementation 'org.junit.jupiter:junit-jupiter-api:5.9.1'
-    dependencies.testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.9.1'
+    dependencies.testImplementation libs.kluent
+    dependencies.testImplementation libs.kotlinTest
+    dependencies.testImplementation libs.mockk
+    dependencies.testImplementation libs.kotlin.coroutines.test
 }
 
 ext.kotlinFixtures = { dependencies ->
-    dependencies.testFixturesImplementation Dependencies.mavenCentral.mockk
-    dependencies.testFixturesImplementation Dependencies.mavenCentral.kluent
-    dependencies.testFixturesImplementation Dependencies.mavenCentral.kotlinCoroutinesCore
-}
-
-ext.androidImportFixturesWorkaround = { project, fixtures ->
-    project.dependencies.testImplementation(project.dependencies.testFixtures(fixtures))
-    project.dependencies.testImplementation fixtures.files("build/libs/${fixtures.name}-test-fixtures.jar")
-    project.dependencies.testImplementation fixtures.files("build/libs/${fixtures.name}.jar")
+    dependencies.testFixturesImplementation libs.mockk
+    dependencies.testFixturesImplementation libs.kluent
+    dependencies.testFixturesImplementation libs.kotlin.coroutines
 }

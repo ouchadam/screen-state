@@ -1,8 +1,6 @@
-ext.Dependencies = new DependenciesContainer()
-
-ext.Dependencies.with {
-    _repositories = { repositories ->
-        repositories.google {
+ext.applyRepositories = { dependencyResolutionManagement ->
+    dependencyResolutionManagement.repositories {
+        google {
             content {
                 includeGroupByRegex "com\\.android.*"
                 includeGroupByRegex "com\\.google.*"
@@ -10,7 +8,14 @@ ext.Dependencies.with {
             }
         }
 
-        repositories.mavenCentral {
+        maven {
+            url 'https://jitpack.io'
+            content {
+                includeGroup "com.github.UnifiedPush"
+            }
+        }
+
+        mavenCentral {
             content {
                 includeGroupByRegex "org\\.jetbrains.*"
                 includeGroupByRegex "com\\.google.*"
@@ -89,50 +94,4 @@ ext.Dependencies.with {
             }
         }
     }
-
-    def kotlinVer = "1.7.20"
-    def composeVer = "1.2.1"
-
-    google = new DependenciesContainer()
-    google.with {
-        androidGradlePlugin = "com.android.tools.build:gradle:7.3.1"
-
-        androidxComposeUi = "androidx.compose.ui:ui:${composeVer}"
-        androidxComposeFoundation = "androidx.compose.foundation:foundation:${composeVer}"
-        androidxComposeMaterial = "androidx.compose.material3:material3:1.0.0-rc01"
-        androidxComposeIconsExtended = "androidx.compose.material:material-icons-extended:${composeVer}"
-        androidxActivityCompose = "androidx.activity:activity-compose:1.6.0"
-        kotlinCompilerExtensionVersion = "1.3.2"
-    }
-
-    mavenCentral = new DependenciesContainer()
-    mavenCentral.with {
-        kotlinGradlePlugin = "org.jetbrains.kotlin:kotlin-gradle-plugin:${kotlinVer}"
-        kotlinSerializationGradlePlugin = "org.jetbrains.kotlin:kotlin-serialization:${kotlinVer}"
-        kotlinSerializationJson = "org.jetbrains.kotlinx:kotlinx-serialization-json:1.4.1"
-        kotlinCoroutinesCore = "org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.4"
-        kotlinCoroutinesTest = 'org.jetbrains.kotlinx:kotlinx-coroutines-test:1.6.4'
-        kotlinTest = "org.jetbrains.kotlin:kotlin-test-junit:${kotlinVer}"
-
-        junit = "junit:junit:4.13.2"
-        kluent = "org.amshove.kluent:kluent:1.72"
-        mockk = 'io.mockk:mockk:1.13.2'
-    }
 }
-
-class DependenciesContainer extends GroovyObjectSupport {
-
-    private final Map<String, Object> storage = new HashMap<String, Object>();
-
-    @Override
-    Object getProperty(String name) {
-        return storage.get(name);
-    }
-
-    @Override
-    void setProperty(String name, Object newValue) {
-        storage.put(name, newValue);
-    }
-}
-
-

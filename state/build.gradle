@@ -1,7 +1,7 @@
 plugins {
-    id 'kotlin'
+    alias libs.plugins.kotlin
 }
 
 dependencies {
-    implementation Dependencies.mavenCentral.kotlinCoroutinesCore
+    implementation libs.kotlin.coroutines
 }
