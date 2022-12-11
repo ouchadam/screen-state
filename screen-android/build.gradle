@@ -1,9 +1,13 @@
 plugins {
-    alias libs.plugins.android.library
-    alias libs.plugins.android.kotlin
+    id "com.android.library"
+    id "kotlin-android"
 }
 
 applyAndroidComposeLibraryModule(project)
+
+android {
+    namespace "app.dapk.screen.components"
+}
 
 dependencies {
     api project(":common")
