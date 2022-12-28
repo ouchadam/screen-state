@@ -4,19 +4,19 @@ import kotlin.reflect.KClass
 
 fun <A : Action, S> sideEffect(klass: KClass<A>, block: suspend (A, S) -> Unit): (ReducerScope<S>) -> ActionHandler<S, A> {
     return {
-        ActionHandler.Async(key = klass) { action -> block(action, getState()) }
+        Async(key = klass) { action -> block(action, getState()) }
     }
 }
 
 fun <A : Action, S> change(klass: KClass<A>, block: (A, S) -> S): (ReducerScope<S>) -> ActionHandler<S, A> {
     return {
-        ActionHandler.Sync(key = klass, block)
+        Sync(key = klass, block)
     }
 }
 
 fun <A : Action, S> async(klass: KClass<A>, block: suspend ReducerScope<S>.(A) -> Unit): (ReducerScope<S>) -> ActionHandler<S, A> {
     return {
-        ActionHandler.Async(key = klass, block)
+        Async(key = klass, block)
     }
 }
 
@@ -29,11 +29,15 @@ fun <A : Action, S> multi(klass: KClass<A>, block: Multi<A, S>.(A) -> (ReducerSc
     }
 
     return {
-        ActionHandler.Delegate(key = klass) { action ->
+        Delegate(key = klass) { action ->
             block(multiScope, action).invoke(this)
         }
     }
 }
+
+internal class Async<S, A : Action>(override val key: KClass<A>, val handler: suspend ReducerScope<S>.(A) -> Unit) : ActionHandler<S, A>
+internal class Sync<S, A : Action>(override val key: KClass<A>, val handler: (A, S) -> S) : ActionHandler<S, A>
+internal class Delegate<S, A : Action>(override val key: KClass<A>, val handler: ReducerScope<S>.(A) -> ActionHandler<S, A>) : ActionHandler<S, A>
 
 interface Multi<A : Action, S> {
     fun sideEffect(block: suspend (S) -> Unit): (ReducerScope<S>) -> ActionHandler<S, A>

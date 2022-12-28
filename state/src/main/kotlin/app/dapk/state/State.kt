@@ -19,14 +19,6 @@ fun interface Reducer<S> {
     fun reduce(action: Action): S
 }
 
-sealed interface ActionHandler<S, A : Action> {
-    val key: KClass<A>
-
-    class Async<S, A : Action>(override val key: KClass<A>, val handler: suspend ReducerScope<S>.(A) -> Unit) : ActionHandler<S, A>
-    class Sync<S, A : Action>(override val key: KClass<A>, val handler: (A, S) -> S) : ActionHandler<S, A>
-    class Delegate<S, A : Action>(override val key: KClass<A>, val handler: ReducerScope<S>.(A) -> ActionHandler<S, A>) : ActionHandler<S, A>
-}
-
 fun <S> createStore(reducerFactory: ReducerFactory<S>, coroutineScope: CoroutineScope): Store<S> {
     val subscribers = mutableListOf<(S) -> Unit>()
     var state: S = reducerFactory.initialState()

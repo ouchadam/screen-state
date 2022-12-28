@@ -2,8 +2,13 @@ package app.dapk.state
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import kotlin.reflect.KClass
 
-fun <S, A : Action> createReducer(
+sealed interface ActionHandler<S, A : Action> {
+    val key: KClass<A>
+}
+
+fun <S: Any , A : Action> createReducer(
     initialState: S,
     vararg reducers: (ReducerScope<S>) -> ActionHandler<S, out A>,
 ): ReducerFactory<S> {
@@ -20,24 +25,24 @@ fun <S, A : Action> createReducer(
                         val actionHandlers = reducersMap[key]!!
                         actionHandlers.fold(outerAccumulator) { acc, handler ->
                             when (handler) {
-                                is ActionHandler.Async -> {
+                                is Async -> {
                                     scope.coroutineScope.launch {
                                         handler.handler.invoke(scope, action)
                                     }
                                     acc
                                 }
 
-                                is ActionHandler.Sync -> handler.handler.invoke(action, acc)
-                                is ActionHandler.Delegate -> when (val next = handler.handler.invoke(scope, action)) {
-                                    is ActionHandler.Async -> {
+                                is Sync -> handler.handler.invoke(action, acc)
+                                is Delegate -> when (val next = handler.handler.invoke(scope, action)) {
+                                    is Async -> {
                                         scope.coroutineScope.launch {
                                             next.handler.invoke(scope, action)
                                         }
                                         acc
                                     }
 
-                                    is ActionHandler.Sync -> next.handler.invoke(action, acc)
-                                    is ActionHandler.Delegate -> error("is not possible")
+                                    is Sync -> next.handler.invoke(action, acc)
+                                    is Delegate -> error("is not possible")
                                 }
                             }
                         }
