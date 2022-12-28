@@ -57,11 +57,11 @@ interface ReducerScope<S> {
 }
 
 sealed interface ActionHandler<S> {
-    val key: KClass<Action>
+    val key: KClass<out Action>
 
-    class Async<S>(override val key: KClass<Action>, val handler: suspend ReducerScope<S>.(Action) -> Unit) : ActionHandler<S>
-    class Sync<S>(override val key: KClass<Action>, val handler: (Action, S) -> S) : ActionHandler<S>
-    class Delegate<S>(override val key: KClass<Action>, val handler: ReducerScope<S>.(Action) -> ActionHandler<S>) : ActionHandler<S>
+    class Async<S>(override val key: KClass<out Action>, val handler: suspend ReducerScope<S>.(Action) -> Unit) : ActionHandler<S>
+    class Sync<S>(override val key: KClass<out Action>, val handler: (Action, S) -> S) : ActionHandler<S>
+    class Delegate<S>(override val key: KClass<out Action>, val handler: ReducerScope<S>.(Action) -> ActionHandler<S>) : ActionHandler<S>
 }
 
 data class Combined2<S1, S2>(val state1: S1, val state2: S2)
@@ -153,19 +153,19 @@ fun <S> createReducer(
 
 fun <A : Action, S> sideEffect(klass: KClass<A>, block: suspend (A, S) -> Unit): (ReducerScope<S>) -> ActionHandler<S> {
     return {
-        ActionHandler.Async(key = klass as KClass<Action>) { action -> block(action as A, getState()) }
+        ActionHandler.Async(key = klass) { action -> block(action as A, getState()) }
     }
 }
 
 fun <A : Action, S> change(klass: KClass<A>, block: (A, S) -> S): (ReducerScope<S>) -> ActionHandler<S> {
     return {
-        ActionHandler.Sync(key = klass as KClass<Action>, block as (Action, S) -> S)
+        ActionHandler.Sync(key = klass, block as (Action, S) -> S)
     }
 }
 
 fun <A : Action, S> async(klass: KClass<A>, block: suspend ReducerScope<S>.(A) -> Unit): (ReducerScope<S>) -> ActionHandler<S> {
     return {
-        ActionHandler.Async(key = klass as KClass<Action>, block as suspend ReducerScope<S>.(Action) -> Unit)
+        ActionHandler.Async(key = klass, block as suspend ReducerScope<S>.(Action) -> Unit)
     }
 }
 
@@ -178,7 +178,7 @@ fun <A : Action, S> multi(klass: KClass<A>, block: Multi<A, S>.(A) -> (ReducerSc
     }
 
     return {
-        ActionHandler.Delegate(key = klass as KClass<Action>) { action ->
+        ActionHandler.Delegate(key = klass) { action ->
             block(multiScope, action as A).invoke(this)
         }
     }
