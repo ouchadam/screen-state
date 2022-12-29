@@ -8,7 +8,7 @@ sealed interface ActionHandler<S, A : Action> {
     val key: KClass<A>
 }
 
-fun <S: Any , A : Action> createReducer(
+fun <S : Any, A : Action> createReducer(
     initialState: S,
     vararg reducers: (ReducerScope<S>) -> ActionHandler<S, out A>,
 ): ReducerFactory<S> {
@@ -43,7 +43,10 @@ fun <S: Any , A : Action> createReducer(
 
                                     is Sync -> next.handler.invoke(action, acc)
                                     is Delegate -> error("is not possible")
+                                    else -> error("is not possible")
                                 }
+
+                                else -> error("is not possible")
                             }
                         }
                     }
@@ -70,24 +73,59 @@ fun <S> shareState(block: SharedStateScope<S>.() -> ReducerFactory<S>): ReducerF
     }
 }
 
-fun <S1, S2> combineReducers(r1: ReducerFactory<S1>, r2: ReducerFactory<S2>): ReducerFactory<Combined2<S1, S2>> {
-    return object : ReducerFactory<Combined2<S1, S2>> {
-        override fun create(scope: ReducerScope<Combined2<S1, S2>>): Reducer<Combined2<S1, S2>> {
-            val r1Scope = createReducerScope(scope) { scope.getState().state1 }
-            val r2Scope = createReducerScope(scope) { scope.getState().state2 }
+fun <S1 : Any, S2 : Any> combineReducers(r1: ReducerFactory<S1>, r2: ReducerFactory<S2>): ReducerFactory<Combined2<S1, S2>> {
+    return combineReducers(
+        to = { Combined2(state1 = it.inner(r1), state2 = it.inner(r2)) },
+        from = { DynamicReducers(mapOf(r1.toKey() to it.state1, r2.toKey() to it.state2)) },
+        initial = { Combined2(r1.initialState(), r2.initialState()) },
+        r1,
+        r2
+    )
+}
 
-            val r1Reducer = r1.create(r1Scope)
-            val r2Reducer = r2.create(r2Scope)
-            return Reducer {
-                Combined2(r1Reducer.reduce(it), r2Reducer.reduce(it))
+private fun <R> combineReducers(to: (DynamicReducers) -> R, from: (R) -> DynamicReducers, initial: () -> R, vararg reducers: ReducerFactory<*>): ReducerFactory<R> {
+    val factory = combineReducers(reducers.toList() as List<ReducerFactory<Any>>)
+    return object : ReducerFactory<R> {
+        override fun create(scope: ReducerScope<R>): Reducer<R> {
+            val delegateScope = createReducerScope(scope) { from(scope.getState()) }
+            return Reducer { to(factory.create(delegateScope).reduce(it)) }
+        }
+
+        override fun initialState(): R = initial()
+    }
+}
+
+fun combineReducers(reducers: List<ReducerFactory<Any>>): ReducerFactory<DynamicReducers> {
+    return object : ReducerFactory<DynamicReducers> {
+        override fun create(scope: ReducerScope<DynamicReducers>): Reducer<DynamicReducers> {
+            val scoped = reducers.map {
+                val innerScope = createReducerScope(scope) { scope.getState().inner<Any>(it) }
+                it.toKey() to it.create(innerScope)
+            }
+
+            return Reducer { action ->
+                val states = scoped.map { (key, reducer) ->
+                    key to reducer.reduce(action)
+                }.toMap()
+                DynamicReducers(states)
             }
         }
 
-        override fun initialState(): Combined2<S1, S2> = Combined2(r1.initialState(), r2.initialState())
+        override fun initialState(): DynamicReducers = DynamicReducers(
+            reducers.associate { it.hashCode() to it.initialState() }
+        )
     }
 }
 
 data class Combined2<S1, S2>(val state1: S1, val state2: S2)
+
+private typealias ReducerKey = Int
+
+data class DynamicReducers(private var state: Map<ReducerKey, Any>) {
+    internal fun <S> inner(reducer: ReducerFactory<*>) = state[reducer.toKey()] as S
+}
+
+private fun ReducerFactory<*>.toKey() = this.hashCode()
 
 private fun <S> createReducerScope(scope: ReducerScope<*>, state: () -> S) = object : ReducerScope<S> {
     override val coroutineScope: CoroutineScope = scope.coroutineScope
