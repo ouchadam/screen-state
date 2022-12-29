@@ -9,8 +9,8 @@ import app.dapk.state.Action
 import app.dapk.state.ReducerFactory
 import app.dapk.state.Store
 import app.dapk.state.createStore
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.SharedFlow
 
 class StateViewModel<S, E>(
     reducerFactory: ReducerFactory<S>,
@@ -18,7 +18,7 @@ class StateViewModel<S, E>(
 ) : ViewModel(), State<S, E> {
 
     private val store: Store<S> = createStore(reducerFactory, viewModelScope)
-    override val events: SharedFlow<E> = eventSource
+    override val events: Flow<E> = eventSource
     override val current
         get() = _state!!
     private var _state: S by mutableStateOf(store.getState())
@@ -43,6 +43,6 @@ fun <S, E> createStateViewModel(block: (suspend (E) -> Unit) -> ReducerFactory<S
 
 interface State<S, E> {
     fun dispatch(action: Action)
-    val events: SharedFlow<E>
+    val events: Flow<E>
     val current: S
 }
