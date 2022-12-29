@@ -83,7 +83,12 @@ fun <S1 : Any, S2 : Any> combineReducers(r1: ReducerFactory<S1>, r2: ReducerFact
     )
 }
 
-private fun <R> combineReducers(to: (DynamicReducers) -> R, from: (R) -> DynamicReducers, initial: () -> R, vararg reducers: ReducerFactory<*>): ReducerFactory<R> {
+private fun <R> combineReducers(
+    to: (DynamicReducers) -> R,
+    from: (R) -> DynamicReducers,
+    initial: () -> R,
+    vararg reducers: ReducerFactory<*>
+): ReducerFactory<R> {
     val factory = combineReducers(reducers.toList() as List<ReducerFactory<Any>>)
     return object : ReducerFactory<R> {
         override fun create(scope: ReducerScope<R>): Reducer<R> {
@@ -95,10 +100,10 @@ private fun <R> combineReducers(to: (DynamicReducers) -> R, from: (R) -> Dynamic
     }
 }
 
-fun combineReducers(reducers: List<ReducerFactory<Any>>): ReducerFactory<DynamicReducers> {
+fun combineReducers(reducers: List<ReducerFactory<out Any>>): ReducerFactory<DynamicReducers> {
     return object : ReducerFactory<DynamicReducers> {
         override fun create(scope: ReducerScope<DynamicReducers>): Reducer<DynamicReducers> {
-            val scoped = reducers.map {
+            val scoped = (reducers as List<ReducerFactory<Any>>).map {
                 val innerScope = createReducerScope(scope) { scope.getState().inner<Any>(it) }
                 it.toKey() to it.create(innerScope)
             }
