@@ -33,17 +33,22 @@ fun <S : Any, A : Action> createReducer(
                                 }
 
                                 is Sync -> handler.handler.invoke(action, acc)
-                                is Delegate -> when (val next = handler.handler.invoke(scope, action)) {
-                                    is Async -> {
-                                        scope.coroutineScope.launch {
-                                            next.handler.invoke(scope, action)
-                                        }
-                                        acc
-                                    }
+                                is Delegate -> {
+                                    val handlers = handler.handler.invoke(scope, action)
+                                    handlers.fold(acc) { childAcc, next ->
+                                        when (next) {
+                                            is Async -> {
+                                                scope.coroutineScope.launch {
+                                                    next.handler.invoke(scope, action)
+                                                }
+                                                childAcc
+                                            }
 
-                                    is Sync -> next.handler.invoke(action, acc)
-                                    is Delegate -> error("is not possible")
-                                    else -> error("is not possible")
+                                            is Sync -> next.handler.invoke(action, childAcc)
+                                            is Delegate -> error("is not possible")
+                                            else -> error("is not possible")
+                                        }
+                                    }
                                 }
 
                                 else -> error("is not possible")
