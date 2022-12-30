@@ -126,8 +126,9 @@ data class Combined2<S1, S2>(val state1: S1, val state2: S2)
 
 private typealias ReducerKey = Int
 
-data class DynamicReducers(private var state: Map<ReducerKey, Any>) {
+data class DynamicReducers(var state: Map<ReducerKey, Any>) {
     internal fun <S> inner(reducer: ReducerFactory<*>) = state[reducer.toKey()] as S
+    inline fun <reified S> getState(): S = state.values.first { it is S } as S
 }
 
 private fun ReducerFactory<*>.toKey() = this.hashCode()
