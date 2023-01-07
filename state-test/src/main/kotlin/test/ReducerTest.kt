@@ -10,6 +10,8 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.amshove.kluent.internal.assertEquals
 import org.amshove.kluent.shouldBeEqualTo
+import state.ExpectTest
+import state.ExpectTestScope
 
 interface ReducerTest<S, E> {
     operator fun invoke(block: suspend ReducerTestScope<S, E>.() -> Unit)
@@ -99,6 +101,11 @@ class ReducerTestScope<S, E>(
 
     fun assertStateChange(expected: S) {
         capturedResult shouldBeEqualTo expected
+    }
+
+    fun assertStateChange(block: (S) -> S) {
+        val expected = block(reducerScope.getState())
+        assertStateChange(expected)
     }
 
     fun assertDispatches(expected: List<Action>) {

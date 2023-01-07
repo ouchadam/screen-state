@@ -1,4 +1,4 @@
-package test
+package state
 
 import io.mockk.*
 import kotlinx.coroutines.CoroutineScope
@@ -33,6 +33,11 @@ internal class ExpectTest(override val coroutineContext: CoroutineContext) : Exp
         expects.add(times to { block(this@expect) })
     }
 
+    override fun <T> T.expectError(error: Throwable, times: Int, block: suspend MockKMatcherScope.(T) -> Unit) {
+        coEvery { block(this@expectError) } throws error
+        expects.add(times to { block(this@expectError) })
+    }
+
     override fun <T> T.captureExpects(block: suspend MockKMatcherScope.(T) -> Unit) {
         groups.add { block(this@captureExpects) }
     }
@@ -44,5 +49,6 @@ interface ExpectTestScope : CoroutineScope {
     fun verifyExpects()
     fun <T> T.expectUnit(times: Int = 1, block: suspend MockKMatcherScope.(T) -> Unit)
     fun <T> T.expect(times: Int = 1, block: suspend MockKMatcherScope.(T) -> Unit)
+    fun <T> T.expectError(error: Throwable, times: Int = 1, block: suspend MockKMatcherScope.(T) -> Unit)
     fun <T> T.captureExpects(block: suspend MockKMatcherScope.(T) -> Unit)
 }
