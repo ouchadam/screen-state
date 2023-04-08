@@ -2,7 +2,7 @@ package app.dapk.state.plugin
 
 import app.dapk.internal.Update
 import app.dapk.state.Action
-import app.dapk.state.ExecutionCollector
+import app.dapk.state.ExecutionRegistrar
 import app.dapk.state.ReducerBuilder
 import app.dapk.state.Store
 import app.dapk.state.ThunkContext
@@ -213,7 +213,7 @@ private fun generateExtensions(ksClass: KSClassDeclaration, annotation: Annotati
                 .addParameter(
                     "block",
                     LambdaTypeName.get(
-                        receiver = ExecutionCollector::class.asTypeName().parameterizedBy(stateType),
+                        receiver = ExecutionRegistrar::class.asTypeName().parameterizedBy(stateType),
                         parameters = listOf,
                         returnType = Unit::class.asTypeName()
                     ),
@@ -227,9 +227,9 @@ private fun generateExtensions(ksClass: KSClassDeclaration, annotation: Annotati
     val receiver = ClassName("", "${stateType.simpleName}Updater")
     val executionExtensions = listOf(
         FunSpec.builder("update")
-            .receiver(ExecutionCollector::class.asTypeName().parameterizedBy(stateType))
+            .receiver(ExecutionRegistrar::class.asTypeName().parameterizedBy(stateType))
             .addParameter("block", LambdaTypeName.get(receiver, emptyList(), Unit::class.asTypeName()))
-            .addStatement("register(${receiver.simpleName}Impl().apply(block).collect())")
+            .addStatement("register(app.dapk.internal.UpdateExec(${receiver.simpleName}Impl().apply(block).collect()))")
             .build(),
 
         FunSpec.builder("thunkUpdate")

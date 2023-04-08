@@ -9,6 +9,7 @@ import app.dapk.gen.updateName
 import app.dapk.state.State
 import app.dapk.state.createReducer
 import app.dapk.state.createStore
+import app.dapk.thunk.thunk
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.onEach
@@ -61,7 +62,10 @@ fun main() {
         }
     }
 
-    val store = createStore(reducer, CoroutineScope(Dispatchers.Default))
+    val store = createStore(
+        reducer,
+        CoroutineScope(Dispatchers.Default)
+    )
 
     store.subscribe {
         println("result: $it")
