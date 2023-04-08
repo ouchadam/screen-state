@@ -1,0 +1,15 @@
+plugins {
+    id "kotlin"
+    id "com.google.devtools.ksp"
+    id 'application'
+}
+
+application {
+    mainClass = 'app.dapk.MainKt'
+}
+
+dependencies {
+    implementation project(":annotations")
+    implementation libs.kotlin.coroutines
+    ksp project(":plugin")
+}
