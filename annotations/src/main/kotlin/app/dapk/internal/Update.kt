@@ -8,6 +8,6 @@ fun interface UpdateRegistrar<T> {
     fun register(update: Update<T>)
 }
 
-fun interface UpdaterCollector<T> {
+fun interface Collectable<T> {
     fun collect(): Update<T>
 }

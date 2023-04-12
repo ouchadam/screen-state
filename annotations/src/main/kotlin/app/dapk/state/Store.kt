@@ -1,12 +1,5 @@
 package app.dapk.state
 
-import app.dapk.internal.Update
-import app.dapk.internal.UpdateExec
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.launch
 import kotlin.reflect.KClass
 
 interface Store<S> {
@@ -15,20 +8,20 @@ interface Store<S> {
     fun subscribe(subscriber: (S) -> Unit)
 }
 
-fun <S> createStore(reducerFactory: ReducerFactory<S>, coroutineScope: CoroutineScope): Store<S> {
+fun <S> createStore(
+    reducerFactory: ReducerFactory<S>,
+    vararg extensions: StoreExtension.Factory<S>
+): Store<S> {
     val subscribers = mutableListOf<(S) -> Unit>()
     var state: S = reducerFactory.initialState()
     return object : Store<S> {
         private val scope = createScope(this)
-        private val environment = createEnvironment(coroutineScope, scope)
-        private val reducer = reducerFactory.create(scope, environment)
+        private val reducer = reducerFactory.create(scope, extensions.map { it.create(scope) })
 
         override fun dispatch(action: Action) {
-            coroutineScope.launch {
-                state = reducer.reduce(action).also { nextState ->
-                    if (nextState != state) {
-                        subscribers.forEach { it.invoke(nextState) }
-                    }
+            state = reducer.reduce(action).also { nextState ->
+                if (nextState != state) {
+                    subscribers.forEach { it.invoke(nextState) }
                 }
             }
         }
@@ -41,34 +34,13 @@ fun <S> createStore(reducerFactory: ReducerFactory<S>, coroutineScope: Coroutine
     }
 }
 
-private fun <S> createEnvironment(coroutineScope: CoroutineScope, reducerScope: ReducerScope<S>) = object : Environment {
+interface StoreExtension<S> {
 
-    private val jobBag = mutableMapOf<String, Job>()
-    override val dynamic: Map<String, Any> = mapOf("thunk" to createThunkContext(this, reducerScope))
-    override val coroutineScope: CoroutineScope = coroutineScope
-    override val defaultActionHandlers: Map<KClass<*>, (Action) -> Execution<*>?> = mapOf(
-        ThunkUpdate::class to { execution -> UpdateExec((execution as ThunkUpdate<S>).update) }
-    )
+    fun registerHandlers(): Map<KClass<*>, (Action) -> Execution<*>> = emptyMap()
+    fun extendEnvironment(): Map<String, Any>
 
-    override fun register(key: String, job: Job) {
-        cancel(key)
-        jobBag[key] = job
-    }
-
-    override fun cancel(key: String) {
-        jobBag[key]?.cancel()
-    }
-}
-
-private data class ThunkUpdate<S>(val update: Update<S>) : Action
-
-private fun <S> createThunkContext(environment: Environment, scope: ReducerScope<S>) = object : ThunkContext<S> {
-    override fun register(update: Update<S>) = dispatch(ThunkUpdate(update))
-    override fun dispatch(action: Action) = scope.dispatch(action)
-    override fun getState(): S = scope.getState()
-
-    override fun <T> Flow<T>.launchInThunk() {
-        launchIn(environment.coroutineScope)
+    fun interface Factory<S> {
+        fun create(reducerScope: ReducerScope<S>): StoreExtension<S>
     }
 }
 

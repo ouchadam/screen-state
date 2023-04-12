@@ -5,7 +5,7 @@ import app.dapk.state.Action
 import app.dapk.state.ExecutionRegistrar
 import app.dapk.state.ReducerBuilder
 import app.dapk.state.Store
-import app.dapk.state.ThunkContext
+import app.dapk.thunk.ThunkExecutionContext
 import com.google.devtools.ksp.getDeclaredFunctions
 import com.google.devtools.ksp.processing.CodeGenerator
 import com.google.devtools.ksp.processing.Dependencies
@@ -71,9 +71,6 @@ data class Prop(
     val type: KSType,
 )
 
-data class AnnotationRep(
-    val actions: Map<KSType, List<ActionFunction>>?
-)
 
 internal class Visitor(
     private val codeGenerator: CodeGenerator,
@@ -84,39 +81,14 @@ internal class Visitor(
     override fun visitClassDeclaration(classDeclaration: KSClassDeclaration, data: Unit) {
         when (classDeclaration.classKind) {
             CLASS -> {
-                val annotation = classDeclaration.annotations.first {
-                    it.shortName.asString() == "State"
-                }
-
-                logger.warn("Start")
-
-
-                classDeclaration.getAllFunctions()
-
-                val actionsClass = annotation.arguments.fold(AnnotationRep(null)) { acc, curr ->
-                    when (curr.name?.getShortName()) {
-                        "actions" -> {
-                            acc.copy(actions = (curr.value as ArrayList<KSType>).toList().toActionFunctions())
-                        }
-
-                        else -> acc
-                    }
-                }
-
+                val actionsClass = classDeclaration.parseStateAnnotation()
                 logger.warn("actions: $actionsClass")
-
                 val className = classDeclaration.simpleName.asString()
-
                 logger.warn("class: $className")
 
-                val parameters = classDeclaration.primaryConstructor?.parameters?.mapNotNull {
-                    it.takeIf { it.name != null }?.let {
-                        val resolvedType = it.type.resolve()
-                        Prop(it.name!!, resolvedType)
-                    }
-                }
 
-                logger.warn(parameters?.map { it.name.getShortName() to it.type.toString() }.toString())
+                val parameters = classDeclaration.parseConstructor()
+                logger.warn(parameters.map { it.name.getShortName() to it.type.toString() }.toString())
 
                 val file = codeGenerator.createNewFile(
                     dependencies = Dependencies(false, *resolver.getAllFiles().toList().toTypedArray()),
@@ -127,7 +99,7 @@ internal class Visitor(
                 file += "package app.dapk.gen\n"
 
                 buildList {
-                    addAll(generateUpdateFunctions(classDeclaration, parameters!!, logger))
+                    addAll(generateUpdateFunctions(classDeclaration, parameters, logger))
                     addAll(generateActions(classDeclaration, actionsClass))
                     addAll(generateExtensions(classDeclaration, actionsClass, logger))
                 }.forEach {
@@ -142,16 +114,7 @@ internal class Visitor(
             }
         }
     }
-
-    private fun List<KSType>.toActionFunctions() = this.associateWith {
-        val declaration = it.declaration as KSClassDeclaration
-        declaration.getDeclaredFunctions()
-            .map { ActionFunction(it.simpleName.getShortName(), it.parameters) }
-            .toList()
-    }
 }
-
-data class ActionFunction(val name: String, val arguments: List<KSValueParameter>)
 
 private fun generateActions(ksClass: KSClassDeclaration, annotation: AnnotationRep): List<Writeable> {
     val domainType = ksClass.toClassName()
@@ -196,9 +159,7 @@ private fun generateActions(ksClass: KSClassDeclaration, annotation: AnnotationR
 }
 
 private fun generateExtensions(ksClass: KSClassDeclaration, annotation: AnnotationRep, logger: KSPLogger): List<Writeable> {
-
     val stateType = ksClass.toClassName()
-    val actionsType = ClassName("app.dapk.gen", "${stateType}Actions")
 
     val actionExtensions = annotation.actions?.map { (key, values) ->
         values.map {
@@ -233,31 +194,49 @@ private fun generateExtensions(ksClass: KSClassDeclaration, annotation: Annotati
             .build(),
 
         FunSpec.builder("thunkUpdate")
-            .receiver(ThunkContext::class.asTypeName().parameterizedBy(stateType))
+            .receiver(ThunkExecutionContext::class.asTypeName().parameterizedBy(stateType))
             .addParameter("block", LambdaTypeName.get(receiver, emptyList(), Unit::class.asTypeName()))
             .addStatement("register(${receiver.simpleName}Impl().apply(block).collect())")
             .build()
     )
 
-    val storeExtensions = annotation.actions?.values?.flatten()?.map {
-        val actionType = ClassName("app.dapk.gen", "${stateType.simpleName}Actions.${it.name.capitalize()}")
+    val dispatcher = annotation.actions?.let {
+        it.map { (key, values) ->
+            val implBuilder = TypeSpec.anonymousClassBuilder()
+                .addSuperinterface(key.toClassName())
 
-        val functionBuilder = FunSpec.builder(it.name)
-            .receiver(Store::class.asTypeName().parameterizedBy(stateType))
-        when {
-            it.arguments.isEmpty() -> functionBuilder.addStatement("dispatch($actionType)")
-            else -> {
-                it.arguments.forEach {
-                    functionBuilder.addParameter(it.name!!.getShortName(), it.type.toTypeName())
+            values.forEach { action ->
+                val actionType = ClassName("app.dapk.gen", "${stateType.simpleName}Actions.${action.name.capitalize()}")
+
+                val funcBuilder = FunSpec.builder(action.name)
+                    .addModifiers(OVERRIDE)
+
+                when {
+                    action.arguments.isEmpty() -> funcBuilder.addStatement("it.dispatch($actionType)")
+                    else -> {
+                        action.arguments.forEach {
+                            funcBuilder.addParameter(it.name!!.getShortName(), it.type.toTypeName())
+                        }
+                        funcBuilder.addStatement("it.dispatch($actionType(${action.arguments.joinToString(separator = ",") { it.name!!.getShortName() }}))")
+                    }
                 }
-                functionBuilder.addStatement("dispatch($actionType(${it.arguments.joinToString(separator = ",") { it.name!!.getShortName() }}))")
+                implBuilder.addFunction(funcBuilder.build())
             }
-        }
-        functionBuilder.build()
 
+            PropertySpec
+                .builder(stateType.simpleName.decapitalize(), key.toClassName())
+                .receiver(Store::class.asTypeName().parameterizedBy(stateType))
+                .delegate(
+                    CodeBlock.Builder()
+                        .beginControlFlow("app.dapk.internal.StoreProperty")
+                        .add(implBuilder.build().toString())
+                        .endControlFlow()
+                        .build()
+                ).build()
+        }
     }.orEmpty()
 
-    return (actionExtensions + executionExtensions + storeExtensions).map { extension ->
+    return (actionExtensions + executionExtensions + dispatcher).map { extension ->
         Writeable { it += extension.toString() }
     }
 }
@@ -271,7 +250,7 @@ private fun generateUpdateFunctions(ksClass: KSClassDeclaration, prop: List<Prop
     val publicApiType = ClassName("", updaterName)
     val internalUpdateApi = TypeSpec.classBuilder("${domainName.replaceFirstChar { it.titlecase() }}UpdaterImpl")
         .addSuperinterface(publicApiType)
-        .addSuperinterface(ClassName("app.dapk.internal", "UpdaterCollector").parameterizedBy(domainType))
+        .addSuperinterface(ClassName("app.dapk.internal", "Collectable").parameterizedBy(domainType))
 
     val collectBuilder = FunSpec
         .builder("collect")
@@ -312,18 +291,12 @@ private fun generateUpdateFunctions(ksClass: KSClassDeclaration, prop: List<Prop
 
         val implFun = funBuilder.toBuilder()
             .addModifiers(OVERRIDE)
-            .addCode(
-                """
-                ${
-                    if (it.type.isMarkedNullable) {
-                        "nullable_${propertyName}_set = true"
-                    } else {
-                        ""
-                    }
+            .apply {
+                if (it.type.isMarkedNullable) {
+                    addCode("nullable_${propertyName}_set = true")
                 }
-                _${propertyName} = $propertyName
-                """.trimIndent()
-            )
+            }
+            .addCode("_${propertyName} = $propertyName")
 
         internalUpdateApi.addFunction(implFun.build())
 

@@ -1,22 +1,23 @@
 package app.dapk.internal
 
 import app.dapk.state.Action
-import app.dapk.state.Environment
 import app.dapk.state.Execution
 import app.dapk.state.Reducer
 import app.dapk.state.ReducerBuilder
 import app.dapk.state.ReducerFactory
 import app.dapk.state.ReducerRegistrar
 import app.dapk.state.ReducerScope
+import app.dapk.state.StoreExtension
 import kotlin.reflect.KClass
 
 internal fun <S> createReducerFactory(
     initialState: S,
     builder: ReducerBuilder<S>.() -> Unit,
 ) = object : ReducerFactory<S> {
-    @Suppress("UNCHECKED_CAST")
-    override fun create(scope: ReducerScope<S>, environment: Environment): Reducer<S> {
-        val actionHandlers = environment.defaultActionHandlers.toMutableMap() as MutableMap<KClass<*>, (Action) -> Execution<S>?>
+    override fun create(scope: ReducerScope<S>, extensions: List<StoreExtension<S>>): Reducer<S> {
+        val actionHandlers = extensions.createActionHandlers()
+        val executionContext = extensions.createExecutionContext()
+
         val registrar = ReducerRegistrar { key, update -> actionHandlers[key] = update }
         val builderImpl = ReducerBuilderImpl(scope, registrar)
         builder(builderImpl)
@@ -27,12 +28,27 @@ internal fun <S> createReducerFactory(
                 .values
                 .mapNotNull { it.invoke(action) }
                 .fold(scope.getState()) { acc, execution ->
-                    execution.execute(acc, environment)
+                    execution.execute(acc, executionContext)
                 }
         }
     }
 
     override fun initialState() = initialState
+}
+
+@Suppress("UNCHECKED_CAST")
+private fun <S> List<StoreExtension<S>>.createActionHandlers(): MutableMap<KClass<*>, (Action) -> Execution<S>?> {
+    return fold(mutableMapOf()) { acc, curr ->
+        acc.putAll(curr.registerHandlers() as Map<KClass<*>, (Action) -> Execution<S>>)
+        acc
+    }
+}
+
+private fun <S> List<StoreExtension<S>>.createExecutionContext() = object : Execution.Context {
+    override val extensionProperties: Map<String, Any> = fold(mutableMapOf()) { acc, curr ->
+        acc.putAll(curr.extendEnvironment())
+        acc
+    }
 }
 
 private class ReducerBuilderImpl<S>(

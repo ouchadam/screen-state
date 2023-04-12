@@ -1,6 +1,5 @@
 package app.dapk.internal
 
-import app.dapk.state.Environment
 import app.dapk.state.Execution
 import app.dapk.state.ExecutionRegistrar
 import app.dapk.state.ReducerBuilder
@@ -22,5 +21,5 @@ private fun <S> createContext(name: String, collector: (Execution<S>) -> Unit) =
 }
 
 data class UpdateExec<S>(private val update: Update<S>) : Execution<S> {
-    override fun execute(state: S, environment: Environment) = update.update(state)
+    override fun execute(state: S, context: Execution.Context) = update.update(state)
 }
