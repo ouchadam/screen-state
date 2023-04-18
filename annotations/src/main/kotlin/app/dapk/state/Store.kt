@@ -34,13 +34,13 @@ fun <S> createStore(
     }
 }
 
-interface StoreExtension<S> {
+interface StoreExtension {
 
     fun registerHandlers(): Map<KClass<*>, (Action) -> Execution<*>> = emptyMap()
     fun extendEnvironment(): Map<String, Any>
 
     fun interface Factory<S> {
-        fun create(reducerScope: ReducerScope<S>): StoreExtension<S>
+        fun create(reducerScope: ReducerScope<S>): StoreExtension
     }
 }
 

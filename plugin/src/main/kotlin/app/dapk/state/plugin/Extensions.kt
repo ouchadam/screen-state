@@ -3,19 +3,14 @@ package app.dapk.state.plugin
 import com.google.devtools.ksp.getDeclaredFunctions
 import com.google.devtools.ksp.symbol.KSClassDeclaration
 import com.google.devtools.ksp.symbol.KSType
-import com.google.devtools.ksp.symbol.KSValueParameter
-
-data class AnnotationRep(
-    val actions: Map<KSType, List<ActionFunction>>?
-)
-data class ActionFunction(val name: String, val arguments: List<KSValueParameter>)
+import com.squareup.kotlinpoet.ksp.toClassName
 
 fun KSClassDeclaration.parseStateAnnotation(): AnnotationRep {
     val annotation = this.annotations.first {
         it.shortName.asString() == "State"
     }
-
-    return annotation.arguments.fold(AnnotationRep(null)) { acc, curr ->
+    val domainType = this.toClassName()
+    return annotation.arguments.fold(AnnotationRep(domainType, null)) { acc, curr ->
         when (curr.name?.getShortName()) {
             "actions" -> {
                 acc.copy(actions = (curr.value as ArrayList<KSType>).toList().toActionFunctions())

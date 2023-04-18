@@ -3,6 +3,7 @@ package app.dapk.state.plugin
 import com.google.devtools.ksp.processing.SymbolProcessor
 import com.google.devtools.ksp.processing.SymbolProcessorEnvironment
 import com.google.devtools.ksp.processing.SymbolProcessorProvider
+import java.util.ServiceLoader
 
 class StateProcessorProvider : SymbolProcessorProvider {
 

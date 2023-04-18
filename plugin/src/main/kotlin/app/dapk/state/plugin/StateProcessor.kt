@@ -1,12 +1,11 @@
 package app.dapk.state.plugin
 
+import app.dapk.extension.Plugin
 import app.dapk.internal.Update
 import app.dapk.state.Action
 import app.dapk.state.ExecutionRegistrar
 import app.dapk.state.ReducerBuilder
 import app.dapk.state.Store
-import app.dapk.thunk.ThunkExecutionContext
-import com.google.devtools.ksp.getDeclaredFunctions
 import com.google.devtools.ksp.processing.CodeGenerator
 import com.google.devtools.ksp.processing.Dependencies
 import com.google.devtools.ksp.processing.KSPLogger
@@ -17,7 +16,6 @@ import com.google.devtools.ksp.symbol.KSAnnotated
 import com.google.devtools.ksp.symbol.KSClassDeclaration
 import com.google.devtools.ksp.symbol.KSName
 import com.google.devtools.ksp.symbol.KSType
-import com.google.devtools.ksp.symbol.KSValueParameter
 import com.google.devtools.ksp.symbol.KSVisitorVoid
 import com.google.devtools.ksp.validate
 import com.squareup.kotlinpoet.ClassName
@@ -33,6 +31,7 @@ import com.squareup.kotlinpoet.asTypeName
 import com.squareup.kotlinpoet.ksp.toClassName
 import com.squareup.kotlinpoet.ksp.toTypeName
 import java.io.OutputStream
+import java.util.ServiceLoader
 
 class StateProcessor(
     private val codeGenerator: CodeGenerator,
@@ -45,6 +44,10 @@ class StateProcessor(
             .getSymbolsWithAnnotation("app.dapk.state.State")
             .filterIsInstance<KSClassDeclaration>()
 
+        logger.warn("${Class.forName("app.dapk.thunk.ThunkPluginExtension").methods.map { it.name }}")
+
+        val plugins = ServiceLoader.load(Plugin::class.java, StateProcessor::class.java.classLoader).toList()
+
         val isEmpty = !symbols.iterator().hasNext()
 
         return if (isEmpty) {
@@ -54,8 +57,7 @@ class StateProcessor(
             // Make sure to associate the generated file with sources to keep/maintain it across incremental builds.
             // Learn more about incremental processing in KSP from the official docs:
             // https://kotlinlang.org/docs/ksp-incremental.html
-
-            symbols.forEach { it.accept(Visitor(codeGenerator, resolver, logger), Unit) }
+            symbols.forEach { it.accept(Visitor(codeGenerator, resolver, logger, plugins), Unit) }
 
             return symbols.filterNot { it.validate() }.toList()
         }
@@ -76,6 +78,7 @@ internal class Visitor(
     private val codeGenerator: CodeGenerator,
     private val resolver: Resolver,
     private val logger: KSPLogger,
+    private val plugins: List<Plugin>,
 ) : KSVisitorVoid() {
 
     override fun visitClassDeclaration(classDeclaration: KSClassDeclaration, data: Unit) {
@@ -85,7 +88,6 @@ internal class Visitor(
                 logger.warn("actions: $actionsClass")
                 val className = classDeclaration.simpleName.asString()
                 logger.warn("class: $className")
-
 
                 val parameters = classDeclaration.parseConstructor()
                 logger.warn(parameters.map { it.name.getShortName() to it.type.toString() }.toString())
@@ -102,6 +104,7 @@ internal class Visitor(
                     addAll(generateUpdateFunctions(classDeclaration, parameters, logger))
                     addAll(generateActions(classDeclaration, actionsClass))
                     addAll(generateExtensions(classDeclaration, actionsClass, logger))
+                    addAll(plugins.map { it.run(logger, actionsClass) })
                 }.forEach {
                     it.writeTo(file)
                 }
@@ -192,12 +195,6 @@ private fun generateExtensions(ksClass: KSClassDeclaration, annotation: Annotati
             .addParameter("block", LambdaTypeName.get(receiver, emptyList(), Unit::class.asTypeName()))
             .addStatement("register(app.dapk.internal.UpdateExec(${receiver.simpleName}Impl().apply(block).collect()))")
             .build(),
-
-        FunSpec.builder("thunkUpdate")
-            .receiver(ThunkExecutionContext::class.asTypeName().parameterizedBy(stateType))
-            .addParameter("block", LambdaTypeName.get(receiver, emptyList(), Unit::class.asTypeName()))
-            .addStatement("register(${receiver.simpleName}Impl().apply(block).collect())")
-            .build()
     )
 
     val dispatcher = annotation.actions?.let {

@@ -16,6 +16,7 @@ dependencyResolutionManagement {
 rootProject.name = "screen-state"
 include ':plugin'
 include ':annotations'
+include ':thunk'
 include ':example'
 
 include ':common'

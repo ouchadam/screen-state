@@ -1,11 +1,16 @@
 package app.dapk.state
 
 import app.dapk.internal.createReducerFactory
+import java.io.Serializable
 import kotlin.annotation.AnnotationTarget.*
 import kotlin.reflect.KClass
 
 @Target(CLASS)
 annotation class State(val actions: Array<KClass<*>> = [])
+
+@Target(CLASS)
+annotation class CombinedState
+
 
 fun interface Reducer<S> {
     fun reduce(action: Action): S
@@ -19,7 +24,7 @@ fun <S : Any> createReducer(
 ): ReducerFactory<S> = createReducerFactory(initialState, builder)
 
 interface ReducerFactory<S> {
-    fun create(scope: ReducerScope<S>, extensions: List<StoreExtension<S>>): Reducer<S>
+    fun create(scope: ReducerScope<S>, extensions: List<StoreExtension>): Reducer<S>
     fun initialState(): S
 }
 

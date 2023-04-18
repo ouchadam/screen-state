@@ -14,10 +14,10 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.launch
 import kotlin.reflect.KClass
 
-fun <S> thunk(coroutineScope: CoroutineScope) = StoreExtension.Factory { scope ->
-    object : StoreExtension<S> {
+fun <S> thunk(coroutineScope: CoroutineScope) = StoreExtension.Factory<S> { scope ->
+    object : StoreExtension {
         override fun registerHandlers(): Map<KClass<*>, (Action) -> Execution<*>> = mapOf(
-            ThunkUpdate::class to { UpdateExec((it as ThunkUpdate<S>).update) }
+            ThunkUpdate::class to { UpdateExec((it as ThunkUpdate<*>).update) }
         )
 
         override fun extendEnvironment(): Map<String, Any> = mapOf(
