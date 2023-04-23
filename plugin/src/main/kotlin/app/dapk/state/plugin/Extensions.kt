@@ -21,6 +21,22 @@ fun KSClassDeclaration.parseStateAnnotation(): AnnotationRep {
     }
 }
 
+fun KSClassDeclaration.parseCombinedStateAnnotation(): AnnotationRep {
+    val annotation = this.annotations.first {
+        it.shortName.asString() == "CombinedState"
+    }
+    val domainType = this.toClassName()
+    return annotation.arguments.fold(AnnotationRep(domainType, null)) { acc, curr ->
+        when (curr.name?.getShortName()) {
+            "actions" -> {
+                acc.copy(actions = (curr.value as ArrayList<KSType>).toList().toActionFunctions())
+            }
+
+            else -> acc
+        }
+    }
+}
+
 private fun List<KSType>.toActionFunctions() = this.associateWith {
     val declaration = it.declaration as KSClassDeclaration
     declaration.getDeclaredFunctions()

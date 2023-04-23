@@ -19,7 +19,7 @@ fun <S> createStore(
         private val reducer = reducerFactory.create(scope, extensions.map { it.create(scope) })
 
         override fun dispatch(action: Action) {
-            state = reducer.reduce(action).also { nextState ->
+            state = reducer.reduce(getState(), action).also { nextState ->
                 if (nextState != state) {
                     subscribers.forEach { it.invoke(nextState) }
                 }

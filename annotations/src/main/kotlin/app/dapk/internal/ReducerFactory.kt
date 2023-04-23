@@ -15,25 +15,32 @@ internal fun <S> createReducerFactory(
     builder: ReducerBuilder<S>.() -> Unit,
 ) = object : ReducerFactory<S> {
     override fun create(scope: ReducerScope<S>, extensions: List<StoreExtension>): Reducer<S> {
-        val actionHandlers = extensions.createActionHandlers<S>()
+        val actionHandlers = buildActionHandlers(builder, scope, extensions)
         val executionContext = extensions.createExecutionContext()
-
-        val registrar = ReducerRegistrar { key, update -> actionHandlers[key] = update }
-        val builderImpl = ReducerBuilderImpl(scope, registrar)
-        builder(builderImpl)
-
-        return Reducer { action ->
+        return Reducer { state, action ->
             actionHandlers
                 .filterKeys { it == action::class }
                 .values
                 .mapNotNull { it.invoke(action) }
-                .fold(scope.getState()) { acc, execution ->
+                .fold(state) { acc, execution ->
                     execution.execute(acc, executionContext)
                 }
         }
     }
 
     override fun initialState() = initialState
+}
+
+private fun <S> buildActionHandlers(
+    builder: ReducerBuilder<S>.() -> Unit,
+    scope: ReducerScope<S>,
+    extensions: List<StoreExtension>
+): MutableMap<KClass<*>, (Action) -> Execution<S>?> {
+    val actionHandlers = extensions.createActionHandlers<S>()
+    val registrar = ReducerRegistrar { key, update -> actionHandlers[key] = update }
+    val builderImpl = ReducerBuilderImpl(scope, registrar)
+    builder(builderImpl)
+    return actionHandlers
 }
 
 @Suppress("UNCHECKED_CAST")

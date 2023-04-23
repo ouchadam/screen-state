@@ -9,11 +9,10 @@ import kotlin.reflect.KClass
 annotation class State(val actions: Array<KClass<*>> = [])
 
 @Target(CLASS)
-annotation class CombinedState
-
+annotation class CombinedState(val actions: Array<KClass<*>> = [])
 
 fun interface Reducer<S> {
-    fun reduce(action: Action): S
+    fun reduce(state: S, action: Action): S
 }
 
 interface Action
