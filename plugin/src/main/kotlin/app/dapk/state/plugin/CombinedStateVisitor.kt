@@ -27,8 +27,7 @@ import com.squareup.kotlinpoet.asTypeName
 import com.squareup.kotlinpoet.ksp.toClassName
 
 internal class CombinedStateVisitor(
-    private val codeGenerator: CodeGenerator,
-    private val resolver: Resolver,
+    private val kspContext: KspContext,
     private val logger: KSPLogger,
     private val plugins: List<Plugin>,
 ) : KSVisitorVoid() {
@@ -41,36 +40,20 @@ internal class CombinedStateVisitor(
                     .toString())
 
                 val className = classDeclaration.simpleName.asString()
-                val file = codeGenerator.createNewFile(
-                    dependencies = Dependencies(
-                        false,
-                        *resolver.getAllFiles().toList().toTypedArray()
-                    ),
-                    packageName = "app.dapk.gen",
-                    fileName = "${className}CombinedGenerated"
-                )
 
-                file += "package app.dapk.gen\n"
+                kspContext.createFile(fileName = "${className}CombinedGenerated") {
+                    val actionClasses = parameters.mapNotNull { param ->
+                        (param.type.declaration as KSClassDeclaration).parseStateAnnotation()
+                    }
 
-                logger.warn("!!!!!!!!!! combined")
-
-                val actionClasses = parameters.mapNotNull { param ->
-                    (param.type.declaration as KSClassDeclaration).parseStateAnnotation()
+                    listOf(
+                        generateCombinedObject(classDeclaration, parameters, actionClasses,),
+                        generateActionExtensions(classDeclaration, parameters)
+                    )
                 }
 
-                generateCombinedObject(
-                    classDeclaration,
-                    parameters,
-                    actionClasses,
-                    resolver,
-                    logger
-                ).writeTo(file)
-                generateActionExtensions(classDeclaration, parameters, actionClasses, resolver).writeTo(file)
-                file.close()
-
                 processStateLike(
-                    codeGenerator,
-                    resolver,
+                    kspContext,
                     classDeclaration,
                     classDeclaration.parseCombinedStateAnnotation(),
                     logger,
@@ -88,8 +71,6 @@ internal class CombinedStateVisitor(
 private fun generateActionExtensions(
     classDeclaration: KSClassDeclaration,
     parameters: List<Prop>,
-    actionClasses: List<AnnotationRep>,
-    resolver: Resolver,
 ): Writeable {
     return if (parameters.isEmpty()) {
         Writeable { }
@@ -109,7 +90,8 @@ private fun generateActionExtensions(
                             |${
                             parameters.joinToString(",\n") {
                                 "(it as ${
-                                    StoreScope::class.asTypeName().parameterizedBy(it.type.toClassName())
+                                    StoreScope::class.asTypeName()
+                                        .parameterizedBy(it.type.toClassName())
                                 }).${it.name.getShortName()}"
                             }
                         }
@@ -127,8 +109,6 @@ private fun generateCombinedObject(
     classDeclaration: KSClassDeclaration,
     parameters: List<Prop>,
     actionClasses: List<AnnotationRep>,
-    resolver: Resolver,
-    logger: KSPLogger
 ): Writeable {
     val domainType = classDeclaration.toClassName()
     val helperObject = TypeSpec.objectBuilder(domainType)
@@ -215,23 +195,14 @@ private fun generateCombinedObject(
                 .build()
         )
         .run {
-
-
-            /*
-
-              public data class Actions(
-    public val stateOne: StateOneAllActions,
-    public val stateTwo: StateTwoAllActions,
-  )
-
-             */
-
             val actions = actionClasses.mapNotNull { domain ->
                 domain.actions?.let {
                     ClassProperty(
                         domain.domainClass.simpleName,
-                        ClassName("app.dapk.gen", "${domain.domainClass.simpleName}AllActions"
-                    ))
+                        ClassName(
+                            "app.dapk.gen", "${domain.domainClass.simpleName}AllActions"
+                        )
+                    )
                 }
             }.takeIf { it.isNotEmpty() }
 

@@ -1,13 +1,15 @@
 package app.dapk.state.plugin
 
 import app.dapk.extension.Plugin
+import app.dapk.internal.StoreProperty
 import app.dapk.internal.Update
+import app.dapk.internal.UpdateExec
+import app.dapk.internal.registerAction
 import app.dapk.state.Action
 import app.dapk.state.ExecutionRegistrar
 import app.dapk.state.ReducerBuilder
 import app.dapk.state.StoreScope
 import com.google.devtools.ksp.processing.CodeGenerator
-import com.google.devtools.ksp.processing.Dependencies
 import com.google.devtools.ksp.processing.KSPLogger
 import com.google.devtools.ksp.processing.Resolver
 import com.google.devtools.ksp.processing.SymbolProcessor
@@ -15,6 +17,7 @@ import com.google.devtools.ksp.symbol.ClassKind.*
 import com.google.devtools.ksp.symbol.KSAnnotated
 import com.google.devtools.ksp.symbol.KSClassDeclaration
 import com.google.devtools.ksp.symbol.KSName
+import com.google.devtools.ksp.symbol.KSReferenceElement
 import com.google.devtools.ksp.symbol.KSType
 import com.google.devtools.ksp.symbol.KSVisitorVoid
 import com.google.devtools.ksp.validate
@@ -30,8 +33,11 @@ import com.squareup.kotlinpoet.TypeSpec
 import com.squareup.kotlinpoet.asTypeName
 import com.squareup.kotlinpoet.ksp.toClassName
 import com.squareup.kotlinpoet.ksp.toTypeName
-import java.io.OutputStream
 import java.util.ServiceLoader
+import kotlin.reflect.KClass
+import kotlin.reflect.jvm.javaMethod
+
+private const val PACKAGE = "app.dapk.gen"
 
 class StateProcessor(
     private val codeGenerator: CodeGenerator,
@@ -44,11 +50,18 @@ class StateProcessor(
 
 
     override fun process(resolver: Resolver): List<KSAnnotated> {
-        return processStateAnnotation(resolver, plugins) + processCombinedStateAnnotation(resolver, plugins)
+        val context = KspContext(codeGenerator, resolver)
+        return processStateAnnotation(context, plugins) + processCombinedStateAnnotation(
+            context,
+            plugins
+        )
     }
 
-    private fun processCombinedStateAnnotation(resolver: Resolver, plugins: List<Plugin>): List<KSAnnotated> {
-        val symbols = resolver
+    private fun processCombinedStateAnnotation(
+        kspContext: KspContext,
+        plugins: List<Plugin>
+    ): List<KSAnnotated> {
+        val symbols = kspContext.resolver
             .getSymbolsWithAnnotation("app.dapk.state.CombinedState")
             .filterIsInstance<KSClassDeclaration>()
 
@@ -58,7 +71,7 @@ class StateProcessor(
         } else {
             symbols.forEach {
                 it.accept(
-                    CombinedStateVisitor(codeGenerator, resolver, logger, plugins),
+                    CombinedStateVisitor(kspContext, logger, plugins),
                     Unit
                 )
             }
@@ -66,8 +79,11 @@ class StateProcessor(
         }
     }
 
-    private fun processStateAnnotation(resolver: Resolver, plugins: List<Plugin>): List<KSAnnotated> {
-        val symbols = resolver
+    private fun processStateAnnotation(
+        kspContext: KspContext,
+        plugins: List<Plugin>
+    ): List<KSAnnotated> {
+        val symbols = kspContext.resolver
             .getSymbolsWithAnnotation("app.dapk.state.State")
             .filterIsInstance<KSClassDeclaration>()
 
@@ -78,7 +94,7 @@ class StateProcessor(
         } else {
             symbols.forEach {
                 it.accept(
-                    StateVisitor(codeGenerator, resolver, logger, plugins),
+                    StateVisitor(kspContext, logger, plugins),
                     Unit
                 )
             }
@@ -94,8 +110,7 @@ data class Prop(
 )
 
 internal class StateVisitor(
-    private val codeGenerator: CodeGenerator,
-    private val resolver: Resolver,
+    private val kspContext: KspContext,
     private val logger: KSPLogger,
     private val plugins: List<Plugin>,
 ) : KSVisitorVoid() {
@@ -104,8 +119,7 @@ internal class StateVisitor(
         when (classDeclaration.classKind) {
             CLASS -> {
                 processStateLike(
-                    codeGenerator,
-                    resolver,
+                    kspContext,
                     classDeclaration,
                     classDeclaration.parseStateAnnotation(),
                     logger,
@@ -121,39 +135,25 @@ internal class StateVisitor(
 }
 
 fun processStateLike(
-    codeGenerator: CodeGenerator,
-    resolver: Resolver,
+    kspContext: KspContext,
     classDeclaration: KSClassDeclaration,
     stateLike: AnnotationRep,
     logger: KSPLogger,
     plugins: List<Plugin>
 ) {
     val className = classDeclaration.simpleName.asString()
-    val file = codeGenerator.createNewFile(
-        dependencies = Dependencies(
-            false,
-            *resolver.getAllFiles().toList().toTypedArray()
-        ),
-        packageName = "app.dapk.gen",
-        fileName = "${className}Generated"
-    )
+    kspContext.createFile(fileName = "${className}Generated") {
+        val parameters = classDeclaration.parseConstructor()
+        logger.warn(parameters.map { it.name.getShortName() to it.type.toString() }
+            .toString())
 
-    file += "package app.dapk.gen\n"
-
-    val parameters = classDeclaration.parseConstructor()
-    logger.warn(parameters.map { it.name.getShortName() to it.type.toString() }
-        .toString())
-
-    buildList {
-        addAll(generateUpdateFunctions(classDeclaration, parameters, logger))
-        addAll(generateActions(classDeclaration, stateLike))
-        addAll(generateExtensions(classDeclaration, stateLike, logger))
-        addAll(plugins.map { it.run(logger, stateLike) })
-    }.forEach {
-        it.writeTo(file)
+        buildList {
+            addAll(generateUpdateFunctions(classDeclaration, parameters, logger))
+            addAll(generateActions(classDeclaration, stateLike))
+            addAll(generateExtensions(classDeclaration, stateLike, logger))
+            addAll(plugins.map { it.run(logger, stateLike) })
+        }
     }
-
-    file.close()
 }
 
 private fun generateActions(
@@ -162,7 +162,7 @@ private fun generateActions(
 ): List<Writeable> {
     val domainType = ksClass.toClassName()
     val domainName = domainType.simpleName
-    val interfaceName = ClassName("app.dapk.gen", "${domainName}Actions")
+    val interfaceName = ClassName(PACKAGE, "${domainName}Actions")
     val generatedActionsInterface = TypeSpec.interfaceBuilder(interfaceName)
         .addModifiers(SEALED)
         .addSuperinterface(Action::class)
@@ -208,11 +208,10 @@ private fun generateExtensions(
     logger: KSPLogger
 ): List<Writeable> {
     val stateType = ksClass.toClassName()
-
     val actionExtensions = annotation.actions?.map { (key, values) ->
         values.map {
             val actionType =
-                ClassName("app.dapk.gen", "${stateType.simpleName}Actions.${it.name.capitalize()}")
+                ClassName(PACKAGE, "${stateType.simpleName}Actions.${it.name.capitalize()}")
 
             val listOf: List<ParameterSpec> = listOf(
                 ParameterSpec("", stateType),
@@ -243,7 +242,7 @@ private fun generateExtensions(
                 "block",
                 LambdaTypeName.get(receiver, emptyList(), Unit::class.asTypeName())
             )
-            .addStatement("register(app.dapk.internal.UpdateExec(${receiver.simpleName}Impl().apply(block).collect()))")
+            .addStatement("register(${UpdateExec::class.qualifiedName}(${receiver.simpleName}Impl().apply(block).collect()))")
             .build(),
     )
 
@@ -254,11 +253,11 @@ private fun generateExtensions(
             .build()
 
         val allActionsImpl = TypeSpec.anonymousClassBuilder()
-            .addSuperinterface(ClassName("app.dapk.gen", type))
+            .addSuperinterface(ClassName(PACKAGE, type))
 
         it.values.flatten().forEach { action ->
             val actionType = ClassName(
-                "app.dapk.gen",
+                PACKAGE,
                 "${stateType.simpleName}Actions.${action.name.capitalize()}"
             )
 
@@ -284,11 +283,11 @@ private fun generateExtensions(
         }
 
         val extension = PropertySpec
-            .builder(stateType.simpleName.decapitalize(), ClassName("app.dapk.gen", type))
+            .builder(stateType.simpleName.decapitalize(), ClassName(PACKAGE, type))
             .receiver(StoreScope::class.asTypeName().parameterizedBy(stateType))
             .delegate(
                 CodeBlock.Builder()
-                    .beginControlFlow("app.dapk.internal.StoreProperty")
+                    .beginControlFlow(StoreProperty::class.qualifiedName!!)
                     .add(allActionsImpl.build().toString())
                     .endControlFlow()
                     .build()
@@ -412,15 +411,9 @@ private fun generateUpdateFunctions(
 
     logger.warn(internalBuild.toString())
 
-
     return listOf(
         Writeable { it += publicUpdateApi.build().toString() },
         Writeable { it += internalBuild.toString() },
         Writeable { it += updateFun.toString() }
     )
-}
-
-fun interface Writeable {
-
-    fun writeTo(outputStream: OutputStream)
 }

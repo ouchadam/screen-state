@@ -1,6 +1,9 @@
 package app.dapk.state.plugin
 
 import com.google.devtools.ksp.getDeclaredFunctions
+import com.google.devtools.ksp.processing.CodeGenerator
+import com.google.devtools.ksp.processing.Dependencies
+import com.google.devtools.ksp.processing.Resolver
 import com.google.devtools.ksp.symbol.KSClassDeclaration
 import com.google.devtools.ksp.symbol.KSName
 import com.google.devtools.ksp.symbol.KSType
@@ -91,4 +94,24 @@ fun createDataClass(name: String, properties: List<ClassProperty>) = TypeSpec.cl
 
 operator fun OutputStream.plusAssign(str: String) {
     this.write(str.toByteArray())
+}
+
+
+class KspContext(
+    val codeGenerator: CodeGenerator,
+    val resolver: Resolver,
+)
+
+fun KspContext.createFile(fileName:String, block: () -> List<Writeable>) {
+    val file = codeGenerator.createNewFile(
+        dependencies = Dependencies(
+            false,
+            *resolver.getAllFiles().toList().toTypedArray()
+        ),
+        packageName = "app.dapk.gen",
+        fileName = fileName
+    )
+
+    file += "package app.dapk.gen\n"
+    file.use { block().forEach { it.writeTo(file) } }
 }
