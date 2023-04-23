@@ -6,8 +6,10 @@ import app.dapk.internal.Update
 import app.dapk.internal.UpdateExec
 import app.dapk.internal.registerAction
 import app.dapk.state.Action
+import app.dapk.state.CombinedState
 import app.dapk.state.ExecutionRegistrar
 import app.dapk.state.ReducerBuilder
+import app.dapk.state.State
 import app.dapk.state.StoreScope
 import com.google.devtools.ksp.processing.CodeGenerator
 import com.google.devtools.ksp.processing.KSPLogger
@@ -19,6 +21,7 @@ import com.google.devtools.ksp.symbol.KSClassDeclaration
 import com.google.devtools.ksp.symbol.KSName
 import com.google.devtools.ksp.symbol.KSReferenceElement
 import com.google.devtools.ksp.symbol.KSType
+import com.google.devtools.ksp.symbol.KSVisitor
 import com.google.devtools.ksp.symbol.KSVisitorVoid
 import com.google.devtools.ksp.validate
 import com.squareup.kotlinpoet.ClassName
@@ -37,7 +40,7 @@ import java.util.ServiceLoader
 import kotlin.reflect.KClass
 import kotlin.reflect.jvm.javaMethod
 
-private const val PACKAGE = "app.dapk.gen"
+const val PACKAGE = "app.dapk.gen"
 
 class StateProcessor(
     private val codeGenerator: CodeGenerator,
@@ -48,58 +51,28 @@ class StateProcessor(
     private val plugins =
         ServiceLoader.load(Plugin::class.java, StateProcessor::class.java.classLoader).toList()
 
-
     override fun process(resolver: Resolver): List<KSAnnotated> {
         val context = KspContext(codeGenerator, resolver)
-        return processStateAnnotation(context, plugins) + processCombinedStateAnnotation(
-            context,
-            plugins
-        )
-    }
-
-    private fun processCombinedStateAnnotation(
-        kspContext: KspContext,
-        plugins: List<Plugin>
-    ): List<KSAnnotated> {
-        val symbols = kspContext.resolver
-            .getSymbolsWithAnnotation("app.dapk.state.CombinedState")
-            .filterIsInstance<KSClassDeclaration>()
-
-        val isEmpty = !symbols.iterator().hasNext()
-        return if (isEmpty) {
-            emptyList()
-        } else {
-            symbols.forEach {
-                it.accept(
-                    CombinedStateVisitor(kspContext, logger, plugins),
-                    Unit
-                )
-            }
-            symbols.filterNot { it.validate() }.toList()
+        return buildList {
+            addAll(processAnnotation<CombinedState>(context) { CombinedStateVisitor(context, logger, plugins) })
+            addAll(processAnnotation<State>(context) { StateVisitor(context, logger, plugins) })
         }
     }
 
-    private fun processStateAnnotation(
+    private inline fun <reified T> processAnnotation(
         kspContext: KspContext,
-        plugins: List<Plugin>
+        visitorProvider: () -> KSVisitor<Unit, Unit>
     ): List<KSAnnotated> {
         val symbols = kspContext.resolver
-            .getSymbolsWithAnnotation("app.dapk.state.State")
+            .getSymbolsWithAnnotation(T::class.qualifiedName!!)
             .filterIsInstance<KSClassDeclaration>()
 
         val isEmpty = !symbols.iterator().hasNext()
-
         return if (isEmpty) {
             emptyList()
         } else {
-            symbols.forEach {
-                it.accept(
-                    StateVisitor(kspContext, logger, plugins),
-                    Unit
-                )
-            }
-
-            return symbols.filterNot { it.validate() }.toList()
+            symbols.forEach { it.accept(visitorProvider(), Unit) }
+            symbols.filterNot { it.validate() }.toList()
         }
     }
 }
@@ -272,9 +245,9 @@ private fun generateExtensions(
                     }
                     funcBuilder.addStatement(
                         "it.dispatch($actionType(${
-                            action.arguments.joinToString(
-                                separator = ","
-                            ) { it.name!!.getShortName() }
+                            action.arguments.joinToString(separator = ",") { 
+                                it.name!!.getShortName() 
+                            }
                         }))"
                     )
                 }
@@ -292,7 +265,6 @@ private fun generateExtensions(
                     .endControlFlow()
                     .build()
             ).build()
-
 
         listOf(extension, allActionsType)
     }.orEmpty()

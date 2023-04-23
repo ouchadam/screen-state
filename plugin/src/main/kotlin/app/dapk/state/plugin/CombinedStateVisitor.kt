@@ -5,6 +5,7 @@ import app.dapk.state.ObjectFactory
 import app.dapk.state.ReducerFactory
 import app.dapk.state.Store
 import app.dapk.state.StoreScope
+import app.dapk.state.combineReducers
 import com.google.devtools.ksp.processing.CodeGenerator
 import com.google.devtools.ksp.processing.Dependencies
 import com.google.devtools.ksp.processing.KSPLogger
@@ -36,13 +37,10 @@ internal class CombinedStateVisitor(
         when (classDeclaration.classKind) {
             ClassKind.CLASS -> {
                 val parameters = classDeclaration.parseConstructor()
-                logger.warn(parameters.map { it.name.getShortName() to it.type.toString() }
-                    .toString())
-
                 val className = classDeclaration.simpleName.asString()
 
                 kspContext.createFile(fileName = "${className}CombinedGenerated") {
-                    val actionClasses = parameters.mapNotNull { param ->
+                    val actionClasses = parameters.map { param ->
                         (param.type.declaration as KSClassDeclaration).parseStateAnnotation()
                     }
 
@@ -76,8 +74,7 @@ private fun generateActionExtensions(
         Writeable { }
     } else {
         val domainType = classDeclaration.toClassName()
-        val actionsType =
-            ClassName.bestGuess("app.dapk.gen.${domainType.simpleName}").nestedClass("Actions")
+        val actionsType = ClassName(PACKAGE, domainType.simpleName).nestedClass("Actions")
         val prop = PropertySpec
             .builder("actions", actionsType)
             .receiver(StoreScope::class.asTypeName().parameterizedBy(domainType))
@@ -130,7 +127,7 @@ private fun generateCombinedObject(
                 .addCode(
                     """
                         return app.dapk.state.combineReducers(factory(), ${
-                        parameters.map { it.name.getShortName() }.joinToString(",")
+                        parameters.joinToString(",") { it.name.getShortName() }
                     })
                     """.trimIndent()
                 )
@@ -178,8 +175,8 @@ private fun generateCombinedObject(
                                         """
                                         |return when(index) {
                                         ${
-                                            parameters.mapIndexed { index, _ ->
-                                                "|  $index -> component${index + 1}()"
+                                            List(parameters.size) { index ->
+                                                "$index -> component${index + 1}()"
                                             }.joinToString("\n")
                                         }
                                         |  else -> error("Unexpected index: ${'$'}index")
@@ -190,7 +187,6 @@ private fun generateCombinedObject(
                             )
                             .build()
                             .toString()
-
                 )
                 .build()
         )
@@ -200,7 +196,7 @@ private fun generateCombinedObject(
                     ClassProperty(
                         domain.domainClass.simpleName,
                         ClassName(
-                            "app.dapk.gen", "${domain.domainClass.simpleName}AllActions"
+                            PACKAGE, "${domain.domainClass.simpleName}AllActions"
                         )
                     )
                 }
