@@ -3,6 +3,7 @@ package app.dapk
 import app.dapk.gen.AllState
 import app.dapk.gen.StateOneActions
 import app.dapk.gen.StateTwoActions
+import app.dapk.gen.actions
 import app.dapk.gen.allState
 import app.dapk.gen.randomize
 import app.dapk.gen.stateOne
@@ -64,10 +65,12 @@ private fun combineExample() {
             .fromReducers(stateOneReducer, stateTwoReducer)
             .outer {
                 randomize { allState, _ ->
-                    update {
-                        stateOne(allState.stateOne.copy(id = allState.stateOne.id.toList().shuffled().toString()))
-                        stateTwo(allState.stateTwo.copy(name = allState.stateTwo.name.toList().shuffled().toString()))
-                    }
+                    dispatch(StateOneActions.UpdateId(
+                        allState.stateOne.id.toList().shuffled().toString()
+                    ))
+                    dispatch(StateTwoActions.UpdateName(
+                        allState.stateTwo.name.toList().shuffled().toString()
+                    ))
                 }
             }
 
@@ -78,22 +81,7 @@ private fun combineExample() {
     }
 
     store.run {
-//        store.actions.stateOne
-//
-//        data class Actions(
-//            val stateOne: app.dapk.StateOne.Actions,
-//            val stateTwo: app.dapk.StateTwo.Actions,
-//        )
-//        val app.dapk.state.Store<app.dapk.AllState>.actions: AllState.Actions by app.dapk.internal.StoreProperty {
-//            AllState.Actions(
-//                it.stateOne,
-//                it.stateTwo
-//            )
-//        }
-
-        (store as app.dapk.state.Store<StateOne>).stateOne.updateId("id 1")
-
-//        dispatch(StateOneActions.UpdateId("id 1"))
+        store.actions.stateOne.updateId("id 1")
         dispatch(StateTwoActions.UpdateName("name 1"))
         dispatch(StateOneActions.UpdateId("id 2"))
         dispatch(StateTwoActions.UpdateName("name 2"))

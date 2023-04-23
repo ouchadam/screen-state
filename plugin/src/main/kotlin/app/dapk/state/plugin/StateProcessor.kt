@@ -69,51 +69,6 @@ class StateProcessor(
         }
     }
 
-    internal class CombinedStateVisitor(
-        private val codeGenerator: CodeGenerator,
-        private val resolver: Resolver,
-        private val logger: KSPLogger,
-        private val plugins: List<Plugin>,
-    ) : KSVisitorVoid() {
-
-        override fun visitClassDeclaration(classDeclaration: KSClassDeclaration, data: Unit) {
-            when (classDeclaration.classKind) {
-                CLASS -> {
-                    val parameters = classDeclaration.parseConstructor()
-                    logger.warn(parameters.map { it.name.getShortName() to it.type.toString() }
-                        .toString())
-
-                    val className = classDeclaration.simpleName.asString()
-                    val file = codeGenerator.createNewFile(
-                        dependencies = Dependencies(
-                            false,
-                            *resolver.getAllFiles().toList().toTypedArray()
-                        ),
-                        packageName = "app.dapk.gen",
-                        fileName = "${className}CombinedGenerated"
-                    )
-
-                    file += "package app.dapk.gen\n"
-                    generateCombinedObject(classDeclaration, parameters, logger).writeTo(file)
-                    file.close()
-
-                    processStateLike(
-                        codeGenerator,
-                        resolver,
-                        classDeclaration,
-                        classDeclaration.parseCombinedStateAnnotation(),
-                        logger,
-                        plugins
-                    )
-                }
-                else -> {
-                    logger.error("Unexpected annotation class: ${classDeclaration.classKind}")
-                }
-            }
-        }
-
-    }
-
     private fun processStateAnnotation(resolver: Resolver, plugins: List<Plugin>): List<KSAnnotated> {
         val symbols = resolver
             .getSymbolsWithAnnotation("app.dapk.state.State")
@@ -124,10 +79,6 @@ class StateProcessor(
         return if (isEmpty) {
             emptyList()
         } else {
-
-            // Make sure to associate the generated file with sources to keep/maintain it across incremental builds.
-            // Learn more about incremental processing in KSP from the official docs:
-            // https://kotlinlang.org/docs/ksp-incremental.html
             symbols.forEach {
                 it.accept(
                     StateVisitor(codeGenerator, resolver, logger, plugins),
@@ -138,104 +89,6 @@ class StateProcessor(
             return symbols.filterNot { it.validate() }.toList()
         }
     }
-}
-
-private fun generateCombinedObject(
-    classDeclaration: KSClassDeclaration,
-    parameters: List<Prop>,
-    logger: KSPLogger
-): Writeable {
-    val domainType = classDeclaration.toClassName()
-    val helperObject = TypeSpec.objectBuilder(domainType)
-        .addFunction(
-            FunSpec.builder("fromReducers")
-                .addParameters(
-                    parameters.map {
-                        ParameterSpec.builder(
-                            it.name.getShortName(),
-                            ReducerFactory::class.asTypeName()
-                                .parameterizedBy(it.type.toClassName())
-                        ).build()
-                    }
-                )
-                .returns(
-                    ReducerFactory::class.asTypeName()
-                        .parameterizedBy(domainType)
-                )
-                .addCode(
-                    """
-                        return app.dapk.state.combineReducers(factory(), ${
-                        parameters.map { it.name.getShortName() }.joinToString(",")
-                    })
-                    """.trimIndent()
-                )
-                .build()
-        )
-        .addFunction(
-            FunSpec.builder("factory")
-                .addModifiers(PRIVATE)
-                .returns(ObjectFactory::class.asTypeName().parameterizedBy(domainType))
-                .addStatement("return " +
-                        TypeSpec.anonymousClassBuilder()
-                            .addSuperinterface(
-                                ObjectFactory::class.asTypeName().parameterizedBy(domainType)
-                            )
-                            .addFunction(
-                                FunSpec.builder("construct")
-                                    .addModifiers(OVERRIDE)
-                                    .addParameter(
-                                        "content",
-                                        List::class.asTypeName()
-                                            .parameterizedBy(Any::class.asTypeName())
-                                    )
-                                    .addCode(
-                                        """
-                                    |return ${domainType.canonicalName}(
-                                    |  ${
-                                            parameters.mapIndexed { index, param -> "content[$index] as ${param.type.toClassName().canonicalName}" }
-                                                .joinToString(",")
-                                        }
-                                    |)
-                                    """.trimMargin()
-                                    )
-                                    .returns(domainType)
-                                    .build()
-
-                            )
-                            .addFunction(
-                                FunSpec.builder("destruct")
-                                    .addModifiers(OVERRIDE)
-                                    .addTypeVariable(TypeVariableName("T"))
-                                    .returns(TypeVariableName("T"))
-                                    .receiver(domainType)
-                                    .addParameter("index", Int::class)
-                                    .addCode(
-                                        """
-                                        |return when(index) {
-                                        ${
-                                            parameters.mapIndexed { index, _ ->
-                                                "|  $index -> component${index + 1}()"
-                                            }.joinToString("\n")
-                                        }
-                                            |  else -> error("Unexpected index: ${'$'}index")
-                                        |} as T
-                                    """.trimMargin()
-                                    )
-                                    .build()
-                            )
-                            .build()
-                            .toString()
-
-                )
-                .build()
-        )
-        .build()
-
-    return Writeable { it += helperObject.toString() }
-}
-
-operator fun OutputStream.plusAssign(str: String) {
-    this.write(str.toByteArray())
 }
 
 data class Prop(
@@ -270,7 +123,7 @@ internal class StateVisitor(
     }
 }
 
-private fun processStateLike(
+fun processStateLike(
     codeGenerator: CodeGenerator,
     resolver: Resolver,
     classDeclaration: KSClassDeclaration,
@@ -316,8 +169,6 @@ private fun generateActions(
     val generatedActionsInterface = TypeSpec.interfaceBuilder(interfaceName)
         .addModifiers(SEALED)
         .addSuperinterface(Action::class)
-
-    // should separate action interface be name spaced?
 
     annotation.actions?.values?.flatten()?.map {
         val name = it.name.capitalize()
