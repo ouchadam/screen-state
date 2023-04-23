@@ -2,7 +2,9 @@ package app.dapk.state.plugin
 
 import com.google.devtools.ksp.getDeclaredFunctions
 import com.google.devtools.ksp.symbol.KSClassDeclaration
+import com.google.devtools.ksp.symbol.KSName
 import com.google.devtools.ksp.symbol.KSType
+import com.squareup.kotlinpoet.ClassName
 import com.squareup.kotlinpoet.FunSpec
 import com.squareup.kotlinpoet.KModifier
 import com.squareup.kotlinpoet.ParameterSpec
@@ -60,23 +62,28 @@ fun KSClassDeclaration.parseConstructor(): List<Prop> {
     }.orEmpty()
 }
 
-fun createDataClass(name: String, properties: List<Prop>) = TypeSpec.classBuilder(name)
+data class ClassProperty(
+    val name: String,
+    val type: ClassName,
+)
+
+fun createDataClass(name: String, properties: List<ClassProperty>) = TypeSpec.classBuilder(name)
     .addModifiers(KModifier.DATA)
     .primaryConstructor(
         FunSpec.constructorBuilder()
             .addParameters(
                 properties.map {
                     ParameterSpec.builder(
-                        it.name.getShortName().decapitalize(),
-                        it.type.toTypeName()
+                        it.name.decapitalize(),
+                        it.type
                     ).build()
                 }
             ).build()
     )
     .addProperties(
         properties.map {
-            val propName = it.name.getShortName().decapitalize()
-            PropertySpec.builder(propName, it.type.toTypeName())
+            val propName = it.name.decapitalize()
+            PropertySpec.builder(propName, it.type)
                 .initializer(propName)
                 .build()
         }

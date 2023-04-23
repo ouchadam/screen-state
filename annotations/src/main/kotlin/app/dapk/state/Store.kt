@@ -2,9 +2,7 @@ package app.dapk.state
 
 import kotlin.reflect.KClass
 
-interface Store<S> {
-    fun dispatch(action: Action)
-    fun getState(): S
+interface Store<S> : StoreScope<S> {
     fun subscribe(subscriber: (S) -> Unit)
 }
 
@@ -40,11 +38,11 @@ interface StoreExtension {
     fun extendEnvironment(): Map<String, Any>
 
     fun interface Factory<S> {
-        fun create(reducerScope: ReducerScope<S>): StoreExtension
+        fun create(storeScope: StoreScope<S>): StoreExtension
     }
 }
 
-private fun <S> createScope(store: Store<S>) = object : ReducerScope<S> {
+private fun <S> createScope(store: Store<S>) = object : StoreScope<S> {
     override fun dispatch(action: Action) = store.dispatch(action)
     override fun getState(): S = store.getState()
 }

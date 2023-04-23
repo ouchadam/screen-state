@@ -23,7 +23,11 @@ fun main() {
     combineExample()
 }
 
-@State(actions = [StateOne.Actions::class])
+interface CommonActions {
+    fun destroy()
+}
+
+@State(actions = [StateOne.Actions::class, CommonActions::class])
 data class StateOne(
     val id: String
 ) {
@@ -32,7 +36,7 @@ data class StateOne(
     }
 }
 
-@State(actions = [StateTwo.Actions::class])
+@State(actions = [StateTwo.Actions::class, CommonActions::class])
 data class StateTwo(
     val name: String
 ) {
@@ -65,12 +69,8 @@ private fun combineExample() {
             .fromReducers(stateOneReducer, stateTwoReducer)
             .outer {
                 randomize { allState, _ ->
-                    dispatch(StateOneActions.UpdateId(
-                        allState.stateOne.id.toList().shuffled().toString()
-                    ))
-                    dispatch(StateTwoActions.UpdateName(
-                        allState.stateTwo.name.toList().shuffled().toString()
-                    ))
+                    actions.stateOne.updateId(allState.stateOne.id.toList().shuffled().toString())
+                    actions.stateTwo.updateName(allState.stateTwo.name.toList().shuffled().toString())
                 }
             }
 
@@ -80,13 +80,14 @@ private fun combineExample() {
         println("result: $it")
     }
 
-    store.run {
-        store.actions.stateOne.updateId("id 1")
-        dispatch(StateTwoActions.UpdateName("name 1"))
-        dispatch(StateOneActions.UpdateId("id 2"))
-        dispatch(StateTwoActions.UpdateName("name 2"))
-        allState.randomize()
+    store.actions.run {
+        stateOne.updateId("id 1")
+        stateTwo.updateName("name 1")
+        stateOne.updateId("id 2")
+        stateTwo.updateName("name 2")
     }
+    store.allState.randomize()
+
 }
 
 private fun todoExample() {

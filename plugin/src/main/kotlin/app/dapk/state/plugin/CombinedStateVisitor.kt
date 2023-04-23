@@ -4,6 +4,7 @@ import app.dapk.extension.Plugin
 import app.dapk.state.ObjectFactory
 import app.dapk.state.ReducerFactory
 import app.dapk.state.Store
+import app.dapk.state.StoreScope
 import com.google.devtools.ksp.processing.CodeGenerator
 import com.google.devtools.ksp.processing.Dependencies
 import com.google.devtools.ksp.processing.KSPLogger
@@ -98,7 +99,7 @@ private fun generateActionExtensions(
             ClassName.bestGuess("app.dapk.gen.${domainType.simpleName}").nestedClass("Actions")
         val prop = PropertySpec
             .builder("actions", actionsType)
-            .receiver(Store::class.asTypeName().parameterizedBy(domainType))
+            .receiver(StoreScope::class.asTypeName().parameterizedBy(domainType))
             .delegate(
                 CodeBlock.Builder()
                     .beginControlFlow("app.dapk.internal.StoreProperty")
@@ -108,7 +109,7 @@ private fun generateActionExtensions(
                             |${
                             parameters.joinToString(",\n") {
                                 "(it as ${
-                                    Store::class.asTypeName().parameterizedBy(it.type.toClassName())
+                                    StoreScope::class.asTypeName().parameterizedBy(it.type.toClassName())
                                 }).${it.name.getShortName()}"
                             }
                         }
@@ -215,11 +216,24 @@ private fun generateCombinedObject(
         )
         .run {
 
+
+            /*
+
+              public data class Actions(
+    public val stateOne: StateOneAllActions,
+    public val stateTwo: StateTwoAllActions,
+  )
+
+             */
+
             val actions = actionClasses.mapNotNull { domain ->
-                domain.actions?.map {
-                    Prop(resolver.getKSNameFromString(domain.domainClass.canonicalName), it.key)
+                domain.actions?.let {
+                    ClassProperty(
+                        domain.domainClass.simpleName,
+                        ClassName("app.dapk.gen", "${domain.domainClass.simpleName}AllActions"
+                    ))
                 }
-            }.takeIf { it.isNotEmpty() }?.flatten()
+            }.takeIf { it.isNotEmpty() }
 
             actions?.let {
                 addType(

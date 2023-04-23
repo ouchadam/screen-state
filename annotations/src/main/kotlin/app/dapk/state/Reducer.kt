@@ -9,7 +9,7 @@ fun <R: Any> combineReducers(
     factory: ObjectFactory<R>,
     vararg factories: ReducerFactory<out Any>,
 ) = object : ReducerFactory<R> {
-    override fun create(scope: ReducerScope<R>, extensions: List<StoreExtension>): Reducer<R> {
+    override fun create(scope: StoreScope<R>, extensions: List<StoreExtension>): Reducer<R> {
         val fullState = scope.getState()
         val reducers = with(factory) {
             factories.mapIndexed { index, reducerFactory ->
@@ -29,7 +29,7 @@ fun <R: Any> combineReducers(
     override fun initialState(): R = factory.construct(factories.map { it.initialState() })
 }
 
-private fun <S, R> ReducerScope<S>.downScope(reader: () -> R) = object : ReducerScope<R> {
+private fun <S, R> StoreScope<S>.downScope(reader: () -> R) = object : StoreScope<R> {
     override fun dispatch(action: Action) = this@downScope.dispatch(action)
     override fun getState(): R = reader()
 }
@@ -37,7 +37,7 @@ private fun <S, R> ReducerScope<S>.downScope(reader: () -> R) = object : Reducer
 fun <S: Any> ReducerFactory<S>.outer(builder: ReducerBuilder<S>.() -> Unit): ReducerFactory<S> {
     val parent = createReducer(this.initialState(), builder)
     return object : ReducerFactory<S> {
-        override fun create(scope: ReducerScope<S>, extensions: List<StoreExtension>): Reducer<S> {
+        override fun create(scope: StoreScope<S>, extensions: List<StoreExtension>): Reducer<S> {
             val parentScope = parent.create(scope, extensions)
             val childScope = this@outer.create(scope, extensions)
             return Reducer { state, action ->

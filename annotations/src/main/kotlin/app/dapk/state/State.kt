@@ -1,7 +1,6 @@
 package app.dapk.state
 
 import app.dapk.internal.createReducerFactory
-import java.io.Serializable
 import kotlin.annotation.AnnotationTarget.*
 import kotlin.reflect.KClass
 
@@ -23,13 +22,13 @@ fun <S : Any> createReducer(
 ): ReducerFactory<S> = createReducerFactory(initialState, builder)
 
 interface ReducerFactory<S> {
-    fun create(scope: ReducerScope<S>, extensions: List<StoreExtension>): Reducer<S>
+    fun create(scope: StoreScope<S>, extensions: List<StoreExtension>): Reducer<S>
     fun initialState(): S
 }
 
-interface ReducerBuilder<S> : ReducerScope<S>, ReducerRegistrar<S>
+interface ReducerBuilder<S> : StoreScope<S>, ReducerRegistrar<S>
 
-interface ReducerScope<S> {
+interface StoreScope<S> {
     fun dispatch(action: Action)
     fun getState(): S
 }

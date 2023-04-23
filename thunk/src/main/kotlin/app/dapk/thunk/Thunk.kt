@@ -6,7 +6,7 @@ import app.dapk.internal.UpdateRegistrar
 import app.dapk.state.Action
 import app.dapk.state.Execution
 import app.dapk.state.ExecutionRegistrar
-import app.dapk.state.ReducerScope
+import app.dapk.state.StoreScope
 import app.dapk.state.StoreExtension
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
@@ -35,7 +35,7 @@ fun <S> ExecutionRegistrar<S>.thunk(key: String? = null, block: suspend ThunkExe
 
 private data class ThunkUpdate<S>(val update: Update<S>) : Action
 
-interface ThunkExecutionContext<S> : UpdateRegistrar<S>, ReducerScope<S> {
+interface ThunkExecutionContext<S> : UpdateRegistrar<S>, StoreScope<S> {
     fun <T> Flow<T>.launchInThunk()
 }
 
@@ -51,7 +51,7 @@ private class ThunkExecutor<S>(
     }
 }
 
-private fun <S> createThunkContext(coroutineScope: CoroutineScope, scope: ReducerScope<S>) = object : ThunkExecutionContext<S> {
+private fun <S> createThunkContext(coroutineScope: CoroutineScope, scope: StoreScope<S>) = object : ThunkExecutionContext<S> {
     override fun register(update: Update<S>) = dispatch(ThunkUpdate(update))
     override fun dispatch(action: Action) = scope.dispatch(action)
     override fun getState(): S = scope.getState()

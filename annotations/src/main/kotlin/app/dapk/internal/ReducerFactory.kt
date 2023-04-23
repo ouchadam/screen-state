@@ -6,7 +6,7 @@ import app.dapk.state.Reducer
 import app.dapk.state.ReducerBuilder
 import app.dapk.state.ReducerFactory
 import app.dapk.state.ReducerRegistrar
-import app.dapk.state.ReducerScope
+import app.dapk.state.StoreScope
 import app.dapk.state.StoreExtension
 import kotlin.reflect.KClass
 
@@ -14,7 +14,7 @@ internal fun <S> createReducerFactory(
     initialState: S,
     builder: ReducerBuilder<S>.() -> Unit,
 ) = object : ReducerFactory<S> {
-    override fun create(scope: ReducerScope<S>, extensions: List<StoreExtension>): Reducer<S> {
+    override fun create(scope: StoreScope<S>, extensions: List<StoreExtension>): Reducer<S> {
         val actionHandlers = buildActionHandlers(builder, scope, extensions)
         val executionContext = extensions.createExecutionContext()
         return Reducer { state, action ->
@@ -33,7 +33,7 @@ internal fun <S> createReducerFactory(
 
 private fun <S> buildActionHandlers(
     builder: ReducerBuilder<S>.() -> Unit,
-    scope: ReducerScope<S>,
+    scope: StoreScope<S>,
     extensions: List<StoreExtension>
 ): MutableMap<KClass<*>, (Action) -> Execution<S>?> {
     val actionHandlers = extensions.createActionHandlers<S>()
@@ -59,7 +59,7 @@ private fun List<StoreExtension>.createExecutionContext() = object : Execution.C
 }
 
 private class ReducerBuilderImpl<S>(
-    scope: ReducerScope<S>,
+    scope: StoreScope<S>,
     registrar: ReducerRegistrar<S>
-) : ReducerScope<S> by scope, ReducerRegistrar<S> by registrar, ReducerBuilder<S>
+) : StoreScope<S> by scope, ReducerRegistrar<S> by registrar, ReducerBuilder<S>
 

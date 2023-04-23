@@ -4,10 +4,8 @@ import app.dapk.extension.Plugin
 import app.dapk.internal.Update
 import app.dapk.state.Action
 import app.dapk.state.ExecutionRegistrar
-import app.dapk.state.ObjectFactory
 import app.dapk.state.ReducerBuilder
-import app.dapk.state.ReducerFactory
-import app.dapk.state.Store
+import app.dapk.state.StoreScope
 import com.google.devtools.ksp.processing.CodeGenerator
 import com.google.devtools.ksp.processing.Dependencies
 import com.google.devtools.ksp.processing.KSPLogger
@@ -29,7 +27,6 @@ import com.squareup.kotlinpoet.ParameterSpec
 import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
 import com.squareup.kotlinpoet.PropertySpec
 import com.squareup.kotlinpoet.TypeSpec
-import com.squareup.kotlinpoet.TypeVariableName
 import com.squareup.kotlinpoet.asTypeName
 import com.squareup.kotlinpoet.ksp.toClassName
 import com.squareup.kotlinpoet.ksp.toTypeName
@@ -251,51 +248,62 @@ private fun generateExtensions(
     )
 
     val dispatcher = annotation.actions?.let {
-        it.map { (key, values) ->
-            val implBuilder = TypeSpec.anonymousClassBuilder()
-                .addSuperinterface(key.toClassName())
+        val type = "${annotation.domainClass.simpleName}AllActions"
+        val allActionsType = TypeSpec.interfaceBuilder(type)
+            .addSuperinterfaces(it.keys.map { it.toClassName() })
+            .build()
 
-            values.forEach { action ->
-                val actionType = ClassName(
-                    "app.dapk.gen",
-                    "${stateType.simpleName}Actions.${action.name.capitalize()}"
-                )
+        val allActionsImpl = TypeSpec.anonymousClassBuilder()
+            .addSuperinterface(ClassName("app.dapk.gen", type))
 
-                val funcBuilder = FunSpec.builder(action.name)
-                    .addModifiers(OVERRIDE)
+        it.values.flatten().forEach { action ->
+            val actionType = ClassName(
+                "app.dapk.gen",
+                "${stateType.simpleName}Actions.${action.name.capitalize()}"
+            )
 
-                when {
-                    action.arguments.isEmpty() -> funcBuilder.addStatement("it.dispatch($actionType)")
-                    else -> {
-                        action.arguments.forEach {
-                            funcBuilder.addParameter(it.name!!.getShortName(), it.type.toTypeName())
-                        }
-                        funcBuilder.addStatement(
-                            "it.dispatch($actionType(${
-                                action.arguments.joinToString(
-                                    separator = ","
-                                ) { it.name!!.getShortName() }
-                            }))"
-                        )
+            val funcBuilder = FunSpec.builder(action.name)
+                .addModifiers(OVERRIDE)
+
+            when {
+                action.arguments.isEmpty() -> funcBuilder.addStatement("it.dispatch($actionType)")
+                else -> {
+                    action.arguments.forEach {
+                        funcBuilder.addParameter(it.name!!.getShortName(), it.type.toTypeName())
                     }
+                    funcBuilder.addStatement(
+                        "it.dispatch($actionType(${
+                            action.arguments.joinToString(
+                                separator = ","
+                            ) { it.name!!.getShortName() }
+                        }))"
+                    )
                 }
-                implBuilder.addFunction(funcBuilder.build())
             }
-
-            PropertySpec
-                .builder(stateType.simpleName.decapitalize(), key.toClassName())
-                .receiver(Store::class.asTypeName().parameterizedBy(stateType))
-                .delegate(
-                    CodeBlock.Builder()
-                        .beginControlFlow("app.dapk.internal.StoreProperty")
-                        .add(implBuilder.build().toString())
-                        .endControlFlow()
-                        .build()
-                ).build()
+            allActionsImpl.addFunction(funcBuilder.build())
         }
+
+        val extension = PropertySpec
+            .builder(stateType.simpleName.decapitalize(), ClassName("app.dapk.gen", type))
+            .receiver(StoreScope::class.asTypeName().parameterizedBy(stateType))
+            .delegate(
+                CodeBlock.Builder()
+                    .beginControlFlow("app.dapk.internal.StoreProperty")
+                    .add(allActionsImpl.build().toString())
+                    .endControlFlow()
+                    .build()
+            ).build()
+
+
+        listOf(extension, allActionsType)
     }.orEmpty()
 
-    return (actionExtensions + executionExtensions + dispatcher).map { extension ->
+
+    return buildList {
+        addAll(actionExtensions)
+        addAll(executionExtensions)
+        addAll(dispatcher)
+    }.map { extension ->
         Writeable { it += extension.toString() }
     }
 }
