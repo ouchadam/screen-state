@@ -34,6 +34,7 @@ import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
 import com.squareup.kotlinpoet.PropertySpec
 import com.squareup.kotlinpoet.TypeSpec
 import com.squareup.kotlinpoet.asTypeName
+import com.squareup.kotlinpoet.ksp.TypeParameterResolver
 import com.squareup.kotlinpoet.ksp.toClassName
 import com.squareup.kotlinpoet.ksp.toTypeName
 import java.util.ServiceLoader
@@ -90,7 +91,7 @@ internal class StateVisitor(
 
     override fun visitClassDeclaration(classDeclaration: KSClassDeclaration, data: Unit) {
         when (classDeclaration.classKind) {
-            CLASS -> {
+            CLASS, OBJECT -> {
                 processStateLike(
                     kspContext,
                     classDeclaration,
@@ -121,7 +122,9 @@ fun processStateLike(
             .toString())
 
         buildList {
-            addAll(generateUpdateFunctions(classDeclaration, parameters, logger))
+            if (!stateLike.isObject) {
+                addAll(generateUpdateFunctions(classDeclaration, parameters, logger))
+            }
             addAll(generateActions(classDeclaration, stateLike))
             addAll(generateExtensions(classDeclaration, stateLike, logger))
             addAll(plugins.map { it.run(logger, stateLike) })
@@ -207,18 +210,6 @@ private fun generateExtensions(
         }
     }?.flatten().orEmpty()
 
-    val receiver = ClassName("", "${stateType.simpleName}Updater")
-    val executionExtensions = listOf(
-        FunSpec.builder("update")
-            .receiver(ExecutionRegistrar::class.asTypeName().parameterizedBy(stateType))
-            .addParameter(
-                "block",
-                LambdaTypeName.get(receiver, emptyList(), Unit::class.asTypeName())
-            )
-            .addStatement("register(${UpdateExec::class.qualifiedName}(${receiver.simpleName}Impl().apply(block).collect()))")
-            .build(),
-    )
-
     val dispatcher = annotation.actions?.let {
         val type = "${annotation.domainClass.simpleName}AllActions"
         val allActionsType = TypeSpec.interfaceBuilder(type)
@@ -272,7 +263,6 @@ private fun generateExtensions(
 
     return buildList {
         addAll(actionExtensions)
-        addAll(executionExtensions)
         addAll(dispatcher)
     }.map { extension ->
         Writeable { it += extension.toString() }
@@ -342,7 +332,7 @@ private fun generateUpdateFunctions(
             .addModifiers(OVERRIDE)
             .apply {
                 if (it.type.isMarkedNullable) {
-                    addCode("nullable_${propertyName}_set = true")
+                    addCode("nullable_${propertyName}_set = true\n")
                 }
             }
             .addCode("_${propertyName} = $propertyName")
@@ -383,9 +373,24 @@ private fun generateUpdateFunctions(
 
     logger.warn(internalBuild.toString())
 
-    return listOf(
-        Writeable { it += publicUpdateApi.build().toString() },
-        Writeable { it += internalBuild.toString() },
-        Writeable { it += updateFun.toString() }
+    val receiver = ClassName("", "${domainType.simpleName}Updater")
+    val executionExtensions = listOf(
+        FunSpec.builder("update")
+            .receiver(ExecutionRegistrar::class.asTypeName().parameterizedBy(domainType))
+            .addParameter(
+                "block",
+                LambdaTypeName.get(receiver, emptyList(), Unit::class.asTypeName())
+            )
+            .addStatement("register(${UpdateExec::class.qualifiedName}(${receiver.simpleName}Impl().apply(block).collect()))")
+            .build(),
     )
+
+    return buildList {
+        add(publicUpdateApi.build())
+        add(internalBuild)
+        add(updateFun)
+        addAll(executionExtensions)
+    }.map { content ->
+        Writeable { it += content.toString() }
+    }
 }

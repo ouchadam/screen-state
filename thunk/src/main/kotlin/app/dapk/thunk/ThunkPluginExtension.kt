@@ -15,14 +15,24 @@ class ThunkPluginExtension : Plugin {
 
     override fun run(logger: KSPLogger, representation: AnnotationRep): Writeable {
         logger.warn("hello from extension")
-        val receiver = ClassName("", "${representation.domainClass.simpleName}Updater")
-        return Writeable {
-            it += FunSpec.builder("thunkUpdate")
-                .receiver(ThunkExecutionContext::class.asTypeName().parameterizedBy(representation.domainClass))
-                .addParameter("block", LambdaTypeName.get(receiver, emptyList(), Unit::class.asTypeName()))
-                .addStatement("register(${receiver.simpleName}Impl().apply(block).collect())")
-                .build()
-                .toString()
+        return if (representation.isObject) {
+            Writeable {  }
+        } else {
+            val receiver = ClassName("", "${representation.domainClass.simpleName}Updater")
+            Writeable {
+                it += FunSpec.builder("thunkUpdate")
+                    .receiver(
+                        ThunkExecutionContext::class.asTypeName()
+                            .parameterizedBy(representation.domainClass)
+                    )
+                    .addParameter(
+                        "block",
+                        LambdaTypeName.get(receiver, emptyList(), Unit::class.asTypeName())
+                    )
+                    .addStatement("register(${receiver.simpleName}Impl().apply(block).collect())")
+                    .build()
+                    .toString()
+            }
         }
     }
 }

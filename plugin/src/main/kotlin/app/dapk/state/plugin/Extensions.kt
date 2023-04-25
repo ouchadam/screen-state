@@ -4,6 +4,7 @@ import com.google.devtools.ksp.getDeclaredFunctions
 import com.google.devtools.ksp.processing.CodeGenerator
 import com.google.devtools.ksp.processing.Dependencies
 import com.google.devtools.ksp.processing.Resolver
+import com.google.devtools.ksp.symbol.ClassKind
 import com.google.devtools.ksp.symbol.KSClassDeclaration
 import com.google.devtools.ksp.symbol.KSName
 import com.google.devtools.ksp.symbol.KSType
@@ -22,7 +23,8 @@ fun KSClassDeclaration.parseStateAnnotation(): AnnotationRep {
         it.shortName.asString() == "State"
     }
     val domainType = this.toClassName()
-    return annotation.arguments.fold(AnnotationRep(domainType, null)) { acc, curr ->
+    val initial = AnnotationRep(domainType, null, isObject = this.classKind == ClassKind.OBJECT)
+    return annotation.arguments.fold(initial) { acc, curr ->
         when (curr.name?.getShortName()) {
             "actions" -> {
                 acc.copy(actions = (curr.value as ArrayList<KSType>).toList().toActionFunctions())
@@ -38,7 +40,7 @@ fun KSClassDeclaration.parseCombinedStateAnnotation(): AnnotationRep {
         it.shortName.asString() == "CombinedState"
     }
     val domainType = this.toClassName()
-    return annotation.arguments.fold(AnnotationRep(domainType, null)) { acc, curr ->
+    return annotation.arguments.fold(AnnotationRep(domainType, null, isObject = this.classKind == ClassKind.OBJECT)) { acc, curr ->
         when (curr.name?.getShortName()) {
             "actions" -> {
                 acc.copy(actions = (curr.value as ArrayList<KSType>).toList().toActionFunctions())
