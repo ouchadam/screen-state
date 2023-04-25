@@ -3,17 +3,10 @@ package app.dapk.state.plugin
 import app.dapk.extension.Plugin
 import app.dapk.state.ObjectFactory
 import app.dapk.state.ReducerFactory
-import app.dapk.state.Store
 import app.dapk.state.StoreScope
-import app.dapk.state.combineReducers
-import com.google.devtools.ksp.processing.CodeGenerator
-import com.google.devtools.ksp.processing.Dependencies
 import com.google.devtools.ksp.processing.KSPLogger
-import com.google.devtools.ksp.processing.Resolver
 import com.google.devtools.ksp.symbol.ClassKind
 import com.google.devtools.ksp.symbol.KSClassDeclaration
-import com.google.devtools.ksp.symbol.KSName
-import com.google.devtools.ksp.symbol.KSType
 import com.google.devtools.ksp.symbol.KSVisitorVoid
 import com.squareup.kotlinpoet.ClassName
 import com.squareup.kotlinpoet.CodeBlock
@@ -44,9 +37,14 @@ internal class CombinedStateVisitor(
                         (param.type.declaration as KSClassDeclaration).parseStateAnnotation()
                     }
 
+                    val domainType = classDeclaration.toClassName()
                     listOf(
-                        generateCombinedObject(classDeclaration, parameters, actionClasses,),
-                        generateActionExtensions(classDeclaration, parameters)
+                        generateCombinedObject(domainType.simpleName, domainType, parameters, actionClasses),
+                        generateActionExtensions(
+                            domainType,
+                            ClassName(PACKAGE, className),
+                            parameters,
+                        )
                     )
                 }
 
@@ -58,6 +56,48 @@ internal class CombinedStateVisitor(
                     plugins
                 )
             }
+
+            ClassKind.INTERFACE -> {
+                logger.warn("!!!!!!!")
+                val sealedSubclasses = classDeclaration.getSealedSubclasses()
+
+                if (!sealedSubclasses.iterator().hasNext()) {
+                    logger.error("Expected sealed interface with subclasses")
+                } else {
+                    val className = classDeclaration.simpleName.asString()
+
+                    val proxy = ClassName(PACKAGE, "${className}Proxy")
+                    val toList = sealedSubclasses.toList()
+                    val actionClasses = toList.map { it.parseStateAnnotation() }
+
+                    val parameters = toList.map {
+                        Prop(it.simpleName, it.asStarProjectedType())
+                    }
+
+                    kspContext.createFile(fileName = "${className}CombinedGenerated") {
+                        listOf(
+                            generateProxy(proxy, parameters),
+                            generateCombinedObject(className, proxy, parameters, actionClasses),
+                            generateActionExtensions(
+                                proxy,
+                                ClassName(PACKAGE, className),
+                                parameters,
+                            )
+                        )
+                    }
+
+                    processStateLike(
+                        kspContext,
+                        parameters,
+                        classDeclaration.parseCombinedStateAnnotation().copy(
+                            domainClass = proxy
+                        ),
+                        logger,
+                        plugins
+                    )
+                }
+            }
+
             else -> {
                 logger.error("Unexpected annotation class: ${classDeclaration.classKind}")
             }
@@ -66,18 +106,25 @@ internal class CombinedStateVisitor(
 
 }
 
+private fun generateProxy(proxyName: ClassName, parameters: List<Prop>): Writeable {
+    val proxyClass = createDataClass(proxyName.simpleName, parameters.map {
+        ClassProperty(it.name.asString(), it.type.toClassName())
+    }).build()
+    return Writeable { it += proxyClass.toString()}
+}
+
 private fun generateActionExtensions(
-    classDeclaration: KSClassDeclaration,
+    stateType: ClassName,
+    objectNamespace: ClassName,
     parameters: List<Prop>,
 ): Writeable {
     return if (parameters.isEmpty()) {
         Writeable { }
     } else {
-        val domainType = classDeclaration.toClassName()
-        val actionsType = ClassName(PACKAGE, domainType.simpleName).nestedClass("Actions")
+        val actionsType = objectNamespace.nestedClass("Actions")
         val prop = PropertySpec
             .builder("actions", actionsType)
-            .receiver(StoreScope::class.asTypeName().parameterizedBy(domainType))
+            .receiver(StoreScope::class.asTypeName().parameterizedBy(stateType))
             .delegate(
                 CodeBlock.Builder()
                     .beginControlFlow("app.dapk.internal.StoreProperty")
@@ -89,7 +136,7 @@ private fun generateActionExtensions(
                                 "(it as ${
                                     StoreScope::class.asTypeName()
                                         .parameterizedBy(it.type.toClassName())
-                                }).${it.name.getShortName()}"
+                                }).${it.simpleName().decapitalize()}"
                             }
                         }
                            |)
@@ -102,19 +149,25 @@ private fun generateActionExtensions(
     }
 }
 
+private fun Prop.simpleName(): String {
+    return this.type.declaration.parentDeclaration?.let {
+        "${it.simpleName.asString()}${this.name.asString()}"
+    } ?: this.name.asString()
+}
+
 private fun generateCombinedObject(
-    classDeclaration: KSClassDeclaration,
+    name: String,
+    domainType: ClassName,
     parameters: List<Prop>,
     actionClasses: List<AnnotationRep>,
 ): Writeable {
-    val domainType = classDeclaration.toClassName()
-    val helperObject = TypeSpec.objectBuilder(domainType)
+    val helperObject = TypeSpec.objectBuilder(name)
         .addFunction(
             FunSpec.builder("fromReducers")
                 .addParameters(
                     parameters.map {
                         ParameterSpec.builder(
-                            it.name.getShortName(),
+                            it.name.getShortName().decapitalize(),
                             ReducerFactory::class.asTypeName()
                                 .parameterizedBy(it.type.toClassName())
                         ).build()
@@ -127,7 +180,7 @@ private fun generateCombinedObject(
                 .addCode(
                     """
                         return app.dapk.state.combineReducers(factory(), ${
-                        parameters.joinToString(",") { it.name.getShortName() }
+                        parameters.joinToString(",") { it.name.getShortName().decapitalize() }
                     })
                     """.trimIndent()
                 )
@@ -196,7 +249,7 @@ private fun generateCombinedObject(
                     ClassProperty(
                         domain.domainClass.simpleName,
                         ClassName(
-                            PACKAGE, "${domain.domainClass.simpleName}AllActions"
+                            PACKAGE, "${domain.simpleName()}AllActions"
                         )
                     )
                 }

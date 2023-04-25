@@ -110,11 +110,20 @@ fun processStateLike(
     logger: KSPLogger,
     plugins: List<Plugin>
 ) {
-    kspContext.createFile(fileName = "${stateLike.simpleName()}Generated") {
-        val parameters = classDeclaration.parseConstructor()
-        logger.warn(parameters.map { it.name.getShortName() to it.type.toString() }
-            .toString())
+    val parameters = classDeclaration.parseConstructor()
+    logger.warn(parameters.map { it.name.getShortName() to it.type.toString() }
+        .toString())
+    processStateLike(kspContext, parameters, stateLike, logger, plugins)
+}
 
+fun processStateLike(
+    kspContext: KspContext,
+    parameters: List<Prop>,
+    stateLike: AnnotationRep,
+    logger: KSPLogger,
+    plugins: List<Plugin>
+) {
+    kspContext.createFile(fileName = "${stateLike.simpleName()}Generated") {
         buildList {
             if (!stateLike.isObject) {
                 addAll(generateUpdateFunctions(stateLike, parameters, logger))
@@ -145,7 +154,7 @@ private fun generateActions(
                         .addParameters(
                             it.arguments.map {
                                 ParameterSpec.builder(
-                                    it.name?.getShortName() ?: "value",
+                                    it.name?.getShortName()?.decapitalize() ?: "value",
                                     it.type.toTypeName()
                                 ).build()
                             }
@@ -153,7 +162,7 @@ private fun generateActions(
                 )
                 .addProperties(
                     it.arguments.map {
-                        val propName = it.name?.getShortName() ?: "value"
+                        val propName = it.name?.getShortName()?.decapitalize() ?: "value"
                         PropertySpec.builder(propName, it.type.toTypeName())
                             .initializer(propName)
                             .build()
@@ -288,7 +297,7 @@ private fun generateUpdateFunctions(
         .indent()
 
     prop.forEach {
-        val propertyName = it.name.getShortName()
+        val propertyName = it.name.getShortName().decapitalize()
         val propertyType = it.type.toTypeName()
         val funBuilder = FunSpec
             .builder(propertyName)

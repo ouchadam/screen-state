@@ -18,7 +18,7 @@ interface Action
 
 fun <S : Any> createReducer(
     initialState: S,
-    builder: ReducerBuilder<S>.() -> Unit,
+    builder: ReducerBuilder<S>.() -> Unit = {},
 ): ReducerFactory<S> = createReducerFactory(initialState, builder)
 
 interface ReducerFactory<S> {
