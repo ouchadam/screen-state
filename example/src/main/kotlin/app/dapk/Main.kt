@@ -3,6 +3,7 @@ package app.dapk
 import app.dapk.gen.actions
 import app.dapk.gen.allState
 import app.dapk.gen.asyncState
+import app.dapk.gen.sealedAllStateProxy
 import app.dapk.gen.todoState
 import app.dapk.state.createStore
 import app.dapk.thunk.ThunkPluginExtension
@@ -14,6 +15,7 @@ import kotlinx.coroutines.runBlocking
 fun main() {
     asyncExample()
     combineExample()
+    sealedCombineExample()
     todoExample()
 }
 
@@ -37,6 +39,18 @@ private fun combineExample() {
         stateTwo.updateName("name 2")
     }
     store.allState.randomize()
+}
+
+private fun sealedCombineExample() {
+    val store = createStore(sealedCombinedReducer)
+
+    store.subscribe { println("result: $it") }
+
+    store.actions.run {
+        stateFour.updateContent("content 1")
+        stateFour.updateContent("content 2")
+    }
+    store.sealedAllStateProxy.randomize()
 }
 
 private fun todoExample() {
