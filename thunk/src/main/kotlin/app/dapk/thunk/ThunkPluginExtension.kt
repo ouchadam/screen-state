@@ -18,7 +18,7 @@ class ThunkPluginExtension : Plugin {
         return if (representation.isObject) {
             Writeable {  }
         } else {
-            val receiver = ClassName("", "${representation.domainClass.simpleName}Updater")
+            val receiver = ClassName("", "${representation.simpleName()}Updater")
             Writeable {
                 it += FunSpec.builder("thunkUpdate")
                     .receiver(

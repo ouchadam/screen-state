@@ -4,7 +4,6 @@ import app.dapk.extension.Plugin
 import app.dapk.internal.StoreProperty
 import app.dapk.internal.Update
 import app.dapk.internal.UpdateExec
-import app.dapk.internal.registerAction
 import app.dapk.state.Action
 import app.dapk.state.CombinedState
 import app.dapk.state.ExecutionRegistrar
@@ -19,7 +18,6 @@ import com.google.devtools.ksp.symbol.ClassKind.*
 import com.google.devtools.ksp.symbol.KSAnnotated
 import com.google.devtools.ksp.symbol.KSClassDeclaration
 import com.google.devtools.ksp.symbol.KSName
-import com.google.devtools.ksp.symbol.KSReferenceElement
 import com.google.devtools.ksp.symbol.KSType
 import com.google.devtools.ksp.symbol.KSVisitor
 import com.google.devtools.ksp.symbol.KSVisitorVoid
@@ -34,12 +32,9 @@ import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
 import com.squareup.kotlinpoet.PropertySpec
 import com.squareup.kotlinpoet.TypeSpec
 import com.squareup.kotlinpoet.asTypeName
-import com.squareup.kotlinpoet.ksp.TypeParameterResolver
 import com.squareup.kotlinpoet.ksp.toClassName
 import com.squareup.kotlinpoet.ksp.toTypeName
 import java.util.ServiceLoader
-import kotlin.reflect.KClass
-import kotlin.reflect.jvm.javaMethod
 
 const val PACKAGE = "app.dapk.gen"
 
@@ -115,30 +110,26 @@ fun processStateLike(
     logger: KSPLogger,
     plugins: List<Plugin>
 ) {
-    val className = classDeclaration.simpleName.asString()
-    kspContext.createFile(fileName = "${className}Generated") {
+    kspContext.createFile(fileName = "${stateLike.simpleName()}Generated") {
         val parameters = classDeclaration.parseConstructor()
         logger.warn(parameters.map { it.name.getShortName() to it.type.toString() }
             .toString())
 
         buildList {
             if (!stateLike.isObject) {
-                addAll(generateUpdateFunctions(classDeclaration, parameters, logger))
+                addAll(generateUpdateFunctions(stateLike, parameters, logger))
             }
-            addAll(generateActions(classDeclaration, stateLike))
-            addAll(generateExtensions(classDeclaration, stateLike, logger))
+            addAll(generateActions(stateLike))
+            addAll(generateExtensions(stateLike, logger))
             addAll(plugins.map { it.run(logger, stateLike) })
         }
     }
 }
 
 private fun generateActions(
-    ksClass: KSClassDeclaration,
     annotation: AnnotationRep
 ): List<Writeable> {
-    val domainType = ksClass.toClassName()
-    val domainName = domainType.simpleName
-    val interfaceName = ClassName(PACKAGE, "${domainName}Actions")
+    val interfaceName = ClassName(PACKAGE, "${annotation.simpleName()}Actions")
     val generatedActionsInterface = TypeSpec.interfaceBuilder(interfaceName)
         .addModifiers(SEALED)
         .addSuperinterface(Action::class)
@@ -179,27 +170,25 @@ private fun generateActions(
 }
 
 private fun generateExtensions(
-    ksClass: KSClassDeclaration,
     annotation: AnnotationRep,
     logger: KSPLogger
 ): List<Writeable> {
-    val stateType = ksClass.toClassName()
     val actionExtensions = annotation.actions?.map { (key, values) ->
         values.map {
             val actionType =
-                ClassName(PACKAGE, "${stateType.simpleName}Actions.${it.name.capitalize()}")
+                ClassName(PACKAGE, "${annotation.simpleName()}Actions.${it.name.capitalize()}")
 
             val listOf: List<ParameterSpec> = listOf(
-                ParameterSpec("", stateType),
+                ParameterSpec("", annotation.domainClass),
                 ParameterSpec("", actionType.topLevelClassName())
             )
             FunSpec.builder(it.name)
-                .receiver(ReducerBuilder::class.asTypeName().parameterizedBy(stateType))
+                .receiver(ReducerBuilder::class.asTypeName().parameterizedBy(annotation.domainClass))
                 .addParameter(
                     "block",
                     LambdaTypeName.get(
                         receiver = ExecutionRegistrar::class.asTypeName()
-                            .parameterizedBy(stateType),
+                            .parameterizedBy(annotation.domainClass),
                         parameters = listOf,
                         returnType = Unit::class.asTypeName()
                     ),
@@ -211,7 +200,7 @@ private fun generateExtensions(
     }?.flatten().orEmpty()
 
     val dispatcher = annotation.actions?.let {
-        val type = "${annotation.domainClass.simpleName}AllActions"
+        val type = "${annotation.simpleName()}AllActions"
         val allActionsType = TypeSpec.interfaceBuilder(type)
             .addSuperinterfaces(it.keys.map { it.toClassName() })
             .build()
@@ -222,7 +211,7 @@ private fun generateExtensions(
         it.values.flatten().forEach { action ->
             val actionType = ClassName(
                 PACKAGE,
-                "${stateType.simpleName}Actions.${action.name.capitalize()}"
+                "${annotation.simpleName()}Actions.${action.name.capitalize()}"
             )
 
             val funcBuilder = FunSpec.builder(action.name)
@@ -247,8 +236,8 @@ private fun generateExtensions(
         }
 
         val extension = PropertySpec
-            .builder(stateType.simpleName.decapitalize(), ClassName(PACKAGE, type))
-            .receiver(StoreScope::class.asTypeName().parameterizedBy(stateType))
+            .builder(annotation.simpleName().decapitalize(), ClassName(PACKAGE, type))
+            .receiver(StoreScope::class.asTypeName().parameterizedBy(annotation.domainClass))
             .delegate(
                 CodeBlock.Builder()
                     .beginControlFlow(StoreProperty::class.qualifiedName!!)
@@ -270,28 +259,26 @@ private fun generateExtensions(
 }
 
 private fun generateUpdateFunctions(
-    ksClass: KSClassDeclaration,
+    stateLike: AnnotationRep,
     prop: List<Prop>,
     logger: KSPLogger
 ): List<Writeable> {
-    val domainType = ksClass.toClassName()
-    val domainName = domainType.simpleName
-    val updaterName = "${domainName.replaceFirstChar { it.titlecase() }}Updater"
+    val updaterName = "${stateLike.simpleName().replaceFirstChar { it.titlecase() }}Updater"
     val publicUpdateApi = TypeSpec.interfaceBuilder(updaterName)
 
     val publicApiType = ClassName("", updaterName)
     val internalUpdateApi =
-        TypeSpec.classBuilder("${domainName.replaceFirstChar { it.titlecase() }}UpdaterImpl")
+        TypeSpec.classBuilder("${stateLike.simpleName().replaceFirstChar { it.titlecase() }}UpdaterImpl")
             .addSuperinterface(publicApiType)
             .addSuperinterface(
                 ClassName("app.dapk.internal", "Collectable").parameterizedBy(
-                    domainType
+                    stateLike.domainClass
                 )
             )
 
     val collectBuilder = FunSpec
         .builder("collect")
-        .returns(Update::class.asTypeName().parameterizedBy(domainType))
+        .returns(Update::class.asTypeName().parameterizedBy(stateLike.domainClass))
         .addModifiers(OVERRIDE)
 
     val collectCopyBlock = CodeBlock.builder()
@@ -359,7 +346,7 @@ private fun generateUpdateFunctions(
     val internalBuild = internalUpdateApi.build()
 
     val updateFun = FunSpec.builder("update")
-        .returns(Update::class.asTypeName().parameterizedBy(domainType))
+        .returns(Update::class.asTypeName().parameterizedBy(stateLike.domainClass))
         .addParameter(
             "block",
             LambdaTypeName.get(publicApiType, emptyList(), Unit::class.asTypeName())
@@ -373,10 +360,10 @@ private fun generateUpdateFunctions(
 
     logger.warn(internalBuild.toString())
 
-    val receiver = ClassName("", "${domainType.simpleName}Updater")
+    val receiver = ClassName("", "${stateLike.simpleName()}Updater")
     val executionExtensions = listOf(
         FunSpec.builder("update")
-            .receiver(ExecutionRegistrar::class.asTypeName().parameterizedBy(domainType))
+            .receiver(ExecutionRegistrar::class.asTypeName().parameterizedBy(stateLike.domainClass))
             .addParameter(
                 "block",
                 LambdaTypeName.get(receiver, emptyList(), Unit::class.asTypeName())

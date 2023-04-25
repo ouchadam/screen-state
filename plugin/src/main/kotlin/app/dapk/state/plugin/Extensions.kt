@@ -23,7 +23,12 @@ fun KSClassDeclaration.parseStateAnnotation(): AnnotationRep {
         it.shortName.asString() == "State"
     }
     val domainType = this.toClassName()
-    val initial = AnnotationRep(domainType, null, isObject = this.classKind == ClassKind.OBJECT)
+    val initial = AnnotationRep(
+        domainType,
+        parentClass = this.parentDeclaration?.let { it as? KSClassDeclaration }?.toClassName(),
+        isObject = this.classKind == ClassKind.OBJECT,
+        actions = null
+    )
     return annotation.arguments.fold(initial) { acc, curr ->
         when (curr.name?.getShortName()) {
             "actions" -> {
@@ -40,7 +45,13 @@ fun KSClassDeclaration.parseCombinedStateAnnotation(): AnnotationRep {
         it.shortName.asString() == "CombinedState"
     }
     val domainType = this.toClassName()
-    return annotation.arguments.fold(AnnotationRep(domainType, null, isObject = this.classKind == ClassKind.OBJECT)) { acc, curr ->
+    val initial = AnnotationRep(
+        domainType,
+        parentClass = this.parentDeclaration?.let { it as? KSClassDeclaration }?.toClassName(),
+        isObject = this.classKind == ClassKind.OBJECT,
+        actions = null
+    )
+    return annotation.arguments.fold(initial) { acc, curr ->
         when (curr.name?.getShortName()) {
             "actions" -> {
                 acc.copy(actions = (curr.value as ArrayList<KSType>).toList().toActionFunctions())
