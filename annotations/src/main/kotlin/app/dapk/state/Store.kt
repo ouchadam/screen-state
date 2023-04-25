@@ -1,5 +1,6 @@
 package app.dapk.state
 
+import java.util.*
 import kotlin.reflect.KClass
 
 interface Store<S> : StoreScope<S> {
@@ -13,14 +14,33 @@ fun <S> createStore(
     val subscribers = mutableListOf<(S) -> Unit>()
     var state: S = reducerFactory.initialState()
     return object : Store<S> {
-        private val scope = createScope(this)
+
+        private var idle = true
+        private val queue = Stack<Action>()
+        private val scope = createScope(this) { addToQueue(it) }
         private val reducer = reducerFactory.create(scope, extensions.map { it.create(scope) })
 
         override fun dispatch(action: Action) {
+            idle = false
             state = reducer.reduce(getState(), action).also { nextState ->
                 if (nextState != state) {
                     subscribers.forEach { it.invoke(nextState) }
                 }
+            }
+            idle = true
+            onIdle()
+        }
+
+        private fun addToQueue(action: Action) {
+            when (idle) {
+                true -> dispatch(action)
+                false -> queue.add(action)
+            }
+        }
+
+        private fun onIdle() {
+            while (queue.isNotEmpty()) {
+                dispatch(queue.pop())
             }
         }
 
@@ -42,7 +62,8 @@ interface StoreExtension {
     }
 }
 
-private fun <S> createScope(store: Store<S>) = object : StoreScope<S> {
-    override fun dispatch(action: Action) = store.dispatch(action)
-    override fun getState(): S = store.getState()
-}
+private fun <S> createScope(store: Store<S>, subDispatch: (Action) -> Unit) =
+    object : StoreScope<S> {
+        override fun dispatch(action: Action) = subDispatch.invoke(action)
+        override fun getState(): S = store.getState()
+    }
