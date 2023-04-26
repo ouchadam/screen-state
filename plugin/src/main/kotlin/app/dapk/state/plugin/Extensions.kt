@@ -6,7 +6,6 @@ import com.google.devtools.ksp.processing.Dependencies
 import com.google.devtools.ksp.processing.Resolver
 import com.google.devtools.ksp.symbol.ClassKind
 import com.google.devtools.ksp.symbol.KSClassDeclaration
-import com.google.devtools.ksp.symbol.KSName
 import com.google.devtools.ksp.symbol.KSType
 import com.squareup.kotlinpoet.ClassName
 import com.squareup.kotlinpoet.FunSpec
@@ -15,41 +14,19 @@ import com.squareup.kotlinpoet.ParameterSpec
 import com.squareup.kotlinpoet.PropertySpec
 import com.squareup.kotlinpoet.TypeSpec
 import com.squareup.kotlinpoet.ksp.toClassName
-import com.squareup.kotlinpoet.ksp.toTypeName
 import java.io.OutputStream
 
-fun KSClassDeclaration.parseStateAnnotation(): AnnotationRep {
+fun KSClassDeclaration.parseStateAnnotations(): AnnotationRep {
     val annotation = this.annotations.first {
-        it.shortName.asString() == "State"
+        it.shortName.asString() == "State" || it.shortName.asString() == "CombinedState"
     }
     val domainType = this.toClassName()
     val initial = AnnotationRep(
-        domainType,
+        domainClass = domainType,
         parentClass = this.parentDeclaration?.let { it as? KSClassDeclaration }?.toClassName(),
         isObject = this.classKind == ClassKind.OBJECT,
-        actions = null
-    )
-    return annotation.arguments.fold(initial) { acc, curr ->
-        when (curr.name?.getShortName()) {
-            "actions" -> {
-                acc.copy(actions = (curr.value as ArrayList<KSType>).toList().toActionFunctions())
-            }
-
-            else -> acc
-        }
-    }
-}
-
-fun KSClassDeclaration.parseCombinedStateAnnotation(): AnnotationRep {
-    val annotation = this.annotations.first {
-        it.shortName.asString() == "CombinedState"
-    }
-    val domainType = this.toClassName()
-    val initial = AnnotationRep(
-        domainType,
-        parentClass = this.parentDeclaration?.let { it as? KSClassDeclaration }?.toClassName(),
-        isObject = this.classKind == ClassKind.OBJECT,
-        actions = null
+        actions = null,
+        isProxy = this.getSealedSubclasses().iterator().hasNext()
     )
     return annotation.arguments.fold(initial) { acc, curr ->
         when (curr.name?.getShortName()) {
@@ -108,7 +85,6 @@ fun createDataClass(name: String, properties: List<ClassProperty>) = TypeSpec.cl
 operator fun OutputStream.plusAssign(str: String) {
     this.write(str.toByteArray())
 }
-
 
 class KspContext(
     val codeGenerator: CodeGenerator,

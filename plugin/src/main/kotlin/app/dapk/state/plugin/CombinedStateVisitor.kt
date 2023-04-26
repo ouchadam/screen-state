@@ -34,16 +34,16 @@ internal class CombinedStateVisitor(
 
                 kspContext.createFile(fileName = "${className}CombinedGenerated") {
                     val actionClasses = parameters.map { param ->
-                        (param.type.declaration as KSClassDeclaration).parseStateAnnotation()
+                        (param.type.declaration as KSClassDeclaration).parseStateAnnotations()
                     }
 
                     val domainType = classDeclaration.toClassName()
                     listOf(
-                        generateCombinedObject(domainType.simpleName, domainType, parameters, actionClasses),
+                        generateCombinedObject(domainType.simpleName, domainType, actionClasses),
                         generateActionExtensions(
                             domainType,
                             ClassName(PACKAGE, className),
-                            parameters,
+                            actionClasses,
                         )
                     )
                 }
@@ -51,14 +51,13 @@ internal class CombinedStateVisitor(
                 processStateLike(
                     kspContext,
                     classDeclaration,
-                    classDeclaration.parseCombinedStateAnnotation(),
+                    classDeclaration.parseStateAnnotations(),
                     logger,
                     plugins
                 )
             }
 
             ClassKind.INTERFACE -> {
-                logger.warn("!!!!!!!")
                 val sealedSubclasses = classDeclaration.getSealedSubclasses()
 
                 if (!sealedSubclasses.iterator().hasNext()) {
@@ -68,7 +67,7 @@ internal class CombinedStateVisitor(
 
                     val proxy = ClassName(PACKAGE, "${className}Proxy")
                     val toList = sealedSubclasses.toList()
-                    val actionClasses = toList.map { it.parseStateAnnotation() }
+                    val actionClasses = toList.map { it.parseStateAnnotations() }
 
                     val parameters = toList.map {
                         Prop(it.simpleName, it.asStarProjectedType())
@@ -77,11 +76,11 @@ internal class CombinedStateVisitor(
                     kspContext.createFile(fileName = "${className}CombinedGenerated") {
                         listOf(
                             generateProxy(proxy, parameters),
-                            generateCombinedObject(className, proxy, parameters, actionClasses),
+                            generateCombinedObject(className, proxy, actionClasses),
                             generateActionExtensions(
                                 proxy,
                                 ClassName(PACKAGE, className),
-                                parameters,
+                                actionClasses,
                             )
                         )
                     }
@@ -89,7 +88,7 @@ internal class CombinedStateVisitor(
                     processStateLike(
                         kspContext,
                         parameters,
-                        classDeclaration.parseCombinedStateAnnotation().copy(
+                        classDeclaration.parseStateAnnotations().copy(
                             domainClass = proxy
                         ),
                         logger,
@@ -116,7 +115,7 @@ private fun generateProxy(proxyName: ClassName, parameters: List<Prop>): Writeab
 private fun generateActionExtensions(
     stateType: ClassName,
     objectNamespace: ClassName,
-    parameters: List<Prop>,
+    parameters: List<AnnotationRep>,
 ): Writeable {
     return if (parameters.isEmpty()) {
         Writeable { }
@@ -135,8 +134,8 @@ private fun generateActionExtensions(
                             parameters.joinToString(",\n") {
                                 "(it as ${
                                     StoreScope::class.asTypeName()
-                                        .parameterizedBy(it.type.toClassName())
-                                }).${it.simpleName().decapitalize()}"
+                                        .parameterizedBy(it.resolveClass())
+                                }).${it.resolveSimpleName().decapitalize()}"
                             }
                         }
                            |)
@@ -149,27 +148,20 @@ private fun generateActionExtensions(
     }
 }
 
-private fun Prop.simpleName(): String {
-    return this.type.declaration.parentDeclaration?.let {
-        "${it.simpleName.asString()}${this.name.asString()}"
-    } ?: this.name.asString()
-}
-
 private fun generateCombinedObject(
     name: String,
     domainType: ClassName,
-    parameters: List<Prop>,
     actionClasses: List<AnnotationRep>,
 ): Writeable {
     val helperObject = TypeSpec.objectBuilder(name)
         .addFunction(
             FunSpec.builder("fromReducers")
                 .addParameters(
-                    parameters.map {
+                    actionClasses.map {
                         ParameterSpec.builder(
-                            it.name.getShortName().decapitalize(),
+                            it.domainClass.simpleName.decapitalize(),
                             ReducerFactory::class.asTypeName()
-                                .parameterizedBy(it.type.toClassName())
+                                .parameterizedBy(it.resolveClass())
                         ).build()
                     }
                 )
@@ -180,7 +172,7 @@ private fun generateCombinedObject(
                 .addCode(
                     """
                         return app.dapk.state.combineReducers(factory(), ${
-                        parameters.joinToString(",") { it.name.getShortName().decapitalize() }
+                        actionClasses.joinToString(",") { it.domainClass.simpleName.decapitalize() }
                     })
                     """.trimIndent()
                 )
@@ -207,7 +199,7 @@ private fun generateCombinedObject(
                                         """
                                     |return ${domainType.canonicalName}(
                                     |  ${
-                                            parameters.mapIndexed { index, param -> "content[$index] as ${param.type.toClassName().canonicalName}" }
+                                            actionClasses.mapIndexed { index, param -> "content[$index] as ${param.domainClass.canonicalName}" }
                                                 .joinToString(",")
                                         }
                                     |)
@@ -228,7 +220,7 @@ private fun generateCombinedObject(
                                         """
                                         |return when(index) {
                                         ${
-                                            List(parameters.size) { index ->
+                                            List(actionClasses.size) { index ->
                                                 "$index -> component${index + 1}()"
                                             }.joinToString("\n")
                                         }
@@ -249,7 +241,7 @@ private fun generateCombinedObject(
                     ClassProperty(
                         domain.domainClass.simpleName,
                         ClassName(
-                            PACKAGE, "${domain.simpleName()}AllActions"
+                            PACKAGE, "${domain.resolveSimpleName()}AllActions"
                         )
                     )
                 }

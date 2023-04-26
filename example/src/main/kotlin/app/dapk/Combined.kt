@@ -11,6 +11,7 @@ import app.dapk.state.CombinedState
 import app.dapk.state.State
 import app.dapk.state.createReducer
 import app.dapk.state.outer
+import app.dapk.thunk.thunk
 
 interface CommonActions {
     fun destroy()
@@ -56,7 +57,7 @@ val combinedReducer = AllState
     )
     .outer {
         randomize { allState, _ ->
-            actions.stateOne.updateId(allState.stateOne.id.toList().shuffled().toString())
-            actions.stateTwo.updateName(allState.stateTwo.name.toList().shuffled().toString())
+            actions.stateOne.updateId(getState().stateOne.id.toList().shuffled().toString())
+            actions.stateTwo.updateName(getState().stateTwo.name.toList().shuffled().toString())
         }
     }
