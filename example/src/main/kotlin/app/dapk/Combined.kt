@@ -2,16 +2,14 @@ package app.dapk
 
 import app.dapk.gen.AllState
 import app.dapk.gen.actions
-import app.dapk.gen.allState
 import app.dapk.gen.randomize
 import app.dapk.gen.update
 import app.dapk.gen.updateId
 import app.dapk.gen.updateName
-import app.dapk.state.CombinedState
-import app.dapk.state.State
+import app.dapk.annotation.CombinedState
+import app.dapk.annotation.State
 import app.dapk.state.createReducer
 import app.dapk.state.outer
-import app.dapk.thunk.thunk
 
 interface CommonActions {
     fun destroy()

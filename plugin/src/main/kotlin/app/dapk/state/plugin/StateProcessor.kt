@@ -4,11 +4,10 @@ import app.dapk.extension.Plugin
 import app.dapk.internal.StoreProperty
 import app.dapk.internal.Update
 import app.dapk.internal.UpdateExec
-import app.dapk.state.Action
-import app.dapk.state.CombinedState
+import app.dapk.annotation.CombinedState
 import app.dapk.state.ExecutionRegistrar
 import app.dapk.state.ReducerBuilder
-import app.dapk.state.State
+import app.dapk.annotation.State
 import app.dapk.state.StoreScope
 import com.google.devtools.ksp.processing.CodeGenerator
 import com.google.devtools.ksp.processing.KSPLogger

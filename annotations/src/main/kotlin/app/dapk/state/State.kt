@@ -1,14 +1,7 @@
 package app.dapk.state
 
 import app.dapk.internal.createReducerFactory
-import kotlin.annotation.AnnotationTarget.*
 import kotlin.reflect.KClass
-
-@Target(CLASS)
-annotation class State(val actions: Array<KClass<*>> = [])
-
-@Target(CLASS)
-annotation class CombinedState(val actions: Array<KClass<*>> = [])
 
 fun interface Reducer<S> {
     fun reduce(state: S, action: Action): S

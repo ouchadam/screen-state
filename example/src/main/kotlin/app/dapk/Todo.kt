@@ -5,11 +5,9 @@ import app.dapk.gen.add
 import app.dapk.gen.delete
 import app.dapk.gen.edit
 import app.dapk.gen.markCompleted
-import app.dapk.gen.thunkUpdate
 import app.dapk.gen.update
-import app.dapk.state.State
+import app.dapk.annotation.State
 import app.dapk.state.createReducer
-import app.dapk.thunk.thunk
 
 @State(actions = [TodoActions::class])
 data class TodoState(
