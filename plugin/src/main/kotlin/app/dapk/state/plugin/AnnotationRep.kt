@@ -2,11 +2,14 @@ package app.dapk.state.plugin
 
 import com.google.devtools.ksp.symbol.KSClassDeclaration
 import com.google.devtools.ksp.symbol.KSValueParameter
+import com.google.devtools.ksp.symbol.Visibility
 import com.squareup.kotlinpoet.ClassName
 import com.squareup.kotlinpoet.ksp.toClassName
+import com.squareup.kotlinpoet.ksp.toKModifier
 
 data class AnnotationRep(
     val domainClass: ClassName,
+    val visibility: Visibility,
     val parentDeclaration: KSClassDeclaration?,
     val actions: List<ActionRep>?,
     val isObject: Boolean,
@@ -14,6 +17,8 @@ data class AnnotationRep(
 ) {
 
     private val parentClass = parentDeclaration?.toClassName()
+
+    fun visibilityModifier() = visibility.toKModifier()!!
 
     fun simpleName() = (parentClass?.let {
         "${it.simpleName}${domainClass.simpleName}"

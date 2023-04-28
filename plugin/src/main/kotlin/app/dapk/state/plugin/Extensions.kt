@@ -3,6 +3,7 @@ package app.dapk.state.plugin
 import app.dapk.annotation.CombinedState
 import app.dapk.annotation.State
 import com.google.devtools.ksp.getDeclaredFunctions
+import com.google.devtools.ksp.getVisibility
 import com.google.devtools.ksp.processing.CodeGenerator
 import com.google.devtools.ksp.processing.Dependencies
 import com.google.devtools.ksp.processing.Resolver
@@ -10,13 +11,16 @@ import com.google.devtools.ksp.symbol.ClassKind
 import com.google.devtools.ksp.symbol.KSAnnotation
 import com.google.devtools.ksp.symbol.KSClassDeclaration
 import com.google.devtools.ksp.symbol.KSType
+import com.google.devtools.ksp.symbol.Visibility
 import com.squareup.kotlinpoet.ClassName
 import com.squareup.kotlinpoet.FunSpec
 import com.squareup.kotlinpoet.KModifier
+import com.squareup.kotlinpoet.KModifier.*
 import com.squareup.kotlinpoet.ParameterSpec
 import com.squareup.kotlinpoet.PropertySpec
 import com.squareup.kotlinpoet.TypeSpec
 import com.squareup.kotlinpoet.ksp.toClassName
+import com.squareup.kotlinpoet.ksp.toKModifier
 import java.io.OutputStream
 
 fun KSClassDeclaration.parseStateAnnotation(): AnnotationRep {
@@ -26,8 +30,10 @@ fun KSClassDeclaration.parseStateAnnotation(): AnnotationRep {
     }
     val domainType = this.toClassName()
     val parentDeclaration = this.parentDeclaration?.let { it as? KSClassDeclaration }
+
     return AnnotationRep(
         domainClass = domainType,
+        visibility = this.getVisibility(),
         parentDeclaration = parentDeclaration,
         isObject = this.classKind == ClassKind.OBJECT,
         actions = annotation.parseActionsArgument("actions")?.plus(
@@ -43,6 +49,7 @@ fun KSClassDeclaration.parseCombinedAnnotation(): CombinedRep {
     return CombinedRep(
         AnnotationRep(
             domainClass = domainType,
+            visibility = this.getVisibility(),
             parentDeclaration = this.parentDeclaration?.let { it as? KSClassDeclaration },
             isObject = this.classKind == ClassKind.OBJECT,
             actions = annotation.parseActionsArgument("actions"),
@@ -126,4 +133,10 @@ fun KspContext.createFile(fileName: String, packageName: String = PACKAGE, block
 
     file += "package $packageName\n"
     file.use { block().forEach { it.writeTo(file) } }
+}
+
+fun PropertySpec.Builder.addVisibility(visibility: Visibility) = this.apply {
+    visibility.toKModifier().takeIf { it != PUBLIC }?.let {
+        addModifiers(it)
+    }
 }

@@ -32,6 +32,7 @@ internal class CombinedStateVisitor(
             ClassKind.CLASS -> {
                 val parameters = classDeclaration.parseConstructor()
                 val className = classDeclaration.simpleName.asString()
+                val combinedAnnotation = classDeclaration.parseCombinedAnnotation()
 
                 kspContext.createFile(fileName = "${className}CombinedGenerated") {
                     val actionClasses = parameters.map { param ->
@@ -40,10 +41,11 @@ internal class CombinedStateVisitor(
 
                     val domainType = classDeclaration.toClassName()
                     listOf(
-                        generateCombinedObject(domainType.simpleName, domainType, actionClasses),
+                        generateCombinedObject(domainType.simpleName, domainType, combinedAnnotation, actionClasses),
                         generateActionExtensions(
                             domainType,
                             ClassName(PACKAGE, className),
+                            combinedAnnotation,
                             actionClasses,
                         )
                     )
@@ -52,7 +54,7 @@ internal class CombinedStateVisitor(
                 processStateLike(
                     kspContext,
                     classDeclaration,
-                    classDeclaration.parseCombinedAnnotation().let {
+                    combinedAnnotation.let {
                         it.annotationRep.copy(actions = it.annotationRep.actions?.plus(it.commonActions ?: emptyList()))
                     },
                     logger,
@@ -62,6 +64,7 @@ internal class CombinedStateVisitor(
 
             ClassKind.INTERFACE -> {
                 val sealedSubclasses = classDeclaration.getSealedSubclasses()
+                val combinedAnnotation = classDeclaration.parseCombinedAnnotation()
 
                 if (!sealedSubclasses.iterator().hasNext()) {
                     logger.error("Expected sealed interface with subclasses")
@@ -79,10 +82,11 @@ internal class CombinedStateVisitor(
                     kspContext.createFile(fileName = "${className}CombinedGenerated") {
                         listOf(
                             generateProxy(proxy, parameters),
-                            generateCombinedObject(className, proxy, actionClasses),
+                            generateCombinedObject(className, proxy, combinedAnnotation, actionClasses),
                             generateActionExtensions(
                                 proxy,
                                 ClassName(PACKAGE, className),
+                                combinedAnnotation,
                                 actionClasses,
                             )
                         )
@@ -91,7 +95,7 @@ internal class CombinedStateVisitor(
                     processStateLike(
                         kspContext,
                         parameters,
-                        classDeclaration.parseCombinedAnnotation().let {
+                        combinedAnnotation.let {
                             it.annotationRep.copy(
                                 domainClass = proxy,
                                 actions = it.annotationRep.actions?.plus(it.commonActions ?: emptyList())
@@ -120,6 +124,7 @@ private fun generateProxy(proxyName: ClassName, parameters: List<Prop>): Writeab
 private fun generateActionExtensions(
     stateType: ClassName,
     objectNamespace: ClassName,
+    combinedRep: CombinedRep,
     parameters: List<AnnotationRep>,
 ): Writeable {
     return if (parameters.isEmpty()) {
@@ -128,6 +133,7 @@ private fun generateActionExtensions(
         val actionsType = objectNamespace.nestedClass("Actions")
         val prop = PropertySpec
             .builder("actions", actionsType)
+            .addVisibility(combinedRep.annotationRep.visibility)
             .receiver(StoreScope::class.asTypeName().parameterizedBy(stateType))
             .delegate(
                 CodeBlock.Builder()
@@ -156,9 +162,11 @@ private fun generateActionExtensions(
 private fun generateCombinedObject(
     name: String,
     domainType: ClassName,
+    combinedRep: CombinedRep,
     actionClasses: List<AnnotationRep>,
 ): Writeable {
     val helperObject = TypeSpec.objectBuilder(name)
+        .addModifiers(combinedRep.annotationRep.visibilityModifier())
         .addFunction(
             FunSpec.builder("fromReducers")
                 .addParameters(

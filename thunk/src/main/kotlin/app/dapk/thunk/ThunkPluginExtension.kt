@@ -21,6 +21,7 @@ class ThunkPluginExtension : Plugin {
             val receiver = ClassName("", "${representation.simpleName()}Updater")
             Writeable {
                 it += FunSpec.builder("thunkUpdate")
+                    .addModifiers(representation.visibilityModifier())
                     .receiver(
                         ThunkExecutionContext::class.asTypeName()
                             .parameterizedBy(representation.domainClass)

@@ -21,6 +21,7 @@ import com.google.devtools.ksp.symbol.KSName
 import com.google.devtools.ksp.symbol.KSType
 import com.google.devtools.ksp.symbol.KSVisitor
 import com.google.devtools.ksp.symbol.KSVisitorVoid
+import com.google.devtools.ksp.symbol.Visibility
 import com.google.devtools.ksp.validate
 import com.squareup.kotlinpoet.ClassName
 import com.squareup.kotlinpoet.CodeBlock
@@ -32,6 +33,7 @@ import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
 import com.squareup.kotlinpoet.PropertySpec
 import com.squareup.kotlinpoet.TypeSpec
 import com.squareup.kotlinpoet.asTypeName
+import com.squareup.kotlinpoet.ksp.toKModifier
 import com.squareup.kotlinpoet.ksp.toTypeName
 import java.util.ServiceLoader
 
@@ -173,6 +175,7 @@ private fun generateExtensions(
                 ParameterSpec("", actionRep.resolveGeneratedAction(it))
             )
             FunSpec.builder(it.name)
+                .addModifiers(annotation.visibilityModifier())
                 .receiver(ReducerBuilder::class.asTypeName().parameterizedBy(annotation.domainClass))
                 .addParameter(
                     "block",
@@ -191,6 +194,7 @@ private fun generateExtensions(
     val dispatcher = annotation.actions?.let {
         val type = "${annotation.simpleName()}AllActions"
         val allActionsType = TypeSpec.interfaceBuilder(type)
+            .addModifiers(annotation.visibilityModifier())
             .addSuperinterfaces(it.map { it.domainClass })
             .build()
 
@@ -226,6 +230,7 @@ private fun generateExtensions(
 
         val extension = PropertySpec
             .builder(annotation.simpleName().decapitalize(), ClassName(PACKAGE, type))
+            .addVisibility(annotation.visibility)
             .receiver(StoreScope::class.asTypeName().parameterizedBy(annotation.domainClass))
             .delegate(
                 CodeBlock.Builder()
@@ -251,10 +256,12 @@ private fun generateUpdateFunctions(
 ): List<Writeable> {
     val updaterName = "${stateLike.simpleName().replaceFirstChar { it.titlecase() }}Updater"
     val publicUpdateApi = TypeSpec.interfaceBuilder(updaterName)
+        .addModifiers(stateLike.visibilityModifier())
 
     val publicApiType = ClassName("", updaterName)
     val internalUpdateApi =
         TypeSpec.classBuilder("${stateLike.simpleName().replaceFirstChar { it.titlecase() }}UpdaterImpl")
+            .addModifiers(stateLike.visibilityModifier())
             .addSuperinterface(publicApiType)
             .addSuperinterface(
                 ClassName("app.dapk.internal", "Collectable").parameterizedBy(
@@ -332,6 +339,7 @@ private fun generateUpdateFunctions(
     val internalBuild = internalUpdateApi.build()
 
     val updateFun = FunSpec.builder("update")
+        .addModifiers(stateLike.visibilityModifier())
         .returns(Update::class.asTypeName().parameterizedBy(stateLike.domainClass))
         .addParameter(
             "block",
@@ -349,6 +357,7 @@ private fun generateUpdateFunctions(
     val receiver = ClassName("", "${stateLike.simpleName()}Updater")
     val executionExtensions = listOf(
         FunSpec.builder("update")
+            .addModifiers(stateLike.visibilityModifier())
             .receiver(ExecutionRegistrar::class.asTypeName().parameterizedBy(stateLike.domainClass))
             .addParameter(
                 "block",
