@@ -5,6 +5,7 @@ import app.dapk.state.Execution
 import app.dapk.state.Reducer
 import app.dapk.state.ReducerBuilder
 import app.dapk.state.ReducerFactory
+import app.dapk.state.ReducerFuncs
 import app.dapk.state.ReducerRegistrar
 import app.dapk.state.StoreScope
 import app.dapk.state.StoreExtension
@@ -15,11 +16,12 @@ internal fun <S> createReducerFactory(
     builder: ReducerBuilder<S>.() -> Unit,
 ) = object : ReducerFactory<S> {
     override fun create(scope: StoreScope<S>, extensions: List<StoreExtension>): Reducer<S> {
-        val actionHandlers = buildActionHandlers(builder, scope, extensions)
+        val config = buildConfig(builder, scope, extensions)
         val executionContext = extensions.createExecutionContext()
         return Reducer { state, action ->
-            actionHandlers
-                .filterKeys { it == action::class }
+            config
+                .actionHandlers.filterKeys { it == action::class }
+                .filterTakeIf { config.accept.invoke(action) }
                 .values
                 .mapNotNull { it.invoke(action) }
                 .fold(state) { acc, execution ->
@@ -31,16 +33,36 @@ internal fun <S> createReducerFactory(
     override fun initialState() = initialState
 }
 
-private fun <S> buildActionHandlers(
+private fun <K, V> Map<K, V>.filterTakeIf(predicate: () -> Boolean): Map<K, V> {
+    return when (predicate()) {
+        true -> this
+        else -> emptyMap()
+    }
+}
+
+private class ReducerConfiguration<S>(
+    val actionHandlers: Map<KClass<*>, (Action) -> Execution<S>?>,
+    val accept: (Action) -> Boolean
+)
+
+private fun <S> buildConfig(
     builder: ReducerBuilder<S>.() -> Unit,
     scope: StoreScope<S>,
     extensions: List<StoreExtension>
-): MutableMap<KClass<*>, (Action) -> Execution<S>?> {
+): ReducerConfiguration<S> {
     val actionHandlers = extensions.createActionHandlers<S>()
+    var accept: (Action) -> Boolean = { true }
     val registrar = ReducerRegistrar { key, update -> actionHandlers[key] = update }
-    val builderImpl = ReducerBuilderImpl(scope, registrar)
+
+    val funcRegistrar = object : ReducerFuncs {
+        override fun accept(predicate: (Action) -> Boolean) {
+            accept = predicate
+        }
+    }
+
+    val builderImpl = ReducerBuilderImpl(scope, registrar, funcRegistrar)
     builder(builderImpl)
-    return actionHandlers
+    return ReducerConfiguration(actionHandlers, accept)
 }
 
 @Suppress("UNCHECKED_CAST")
@@ -60,6 +82,7 @@ private fun List<StoreExtension>.createExecutionContext() = object : Execution.C
 
 private class ReducerBuilderImpl<S>(
     scope: StoreScope<S>,
-    registrar: ReducerRegistrar<S>
-) : StoreScope<S> by scope, ReducerRegistrar<S> by registrar, ReducerBuilder<S>
+    registrar: ReducerRegistrar<S>,
+    funcs: ReducerFuncs,
+) : StoreScope<S> by scope, ReducerRegistrar<S> by registrar, ReducerBuilder<S>, ReducerFuncs by funcs
 

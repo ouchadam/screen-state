@@ -26,7 +26,11 @@ interface ReducerFactory<S> {
     fun initialState(): S
 }
 
-interface ReducerBuilder<S> : StoreScope<S>, ReducerRegistrar<S>
+interface ReducerBuilder<S> : StoreScope<S>, ReducerRegistrar<S>, ReducerFuncs
+
+interface ReducerFuncs {
+    fun accept(predicate: (Action) -> Boolean)
+}
 
 interface StoreScope<S> {
     fun dispatch(action: Action)
