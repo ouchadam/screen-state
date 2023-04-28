@@ -3,6 +3,7 @@ package app.dapk
 import app.dapk.gen.actions
 import app.dapk.gen.allState
 import app.dapk.gen.asyncState
+import app.dapk.gen.pageMapProxy
 import app.dapk.gen.sealedAllStateProxy
 import app.dapk.gen.todoState
 import app.dapk.state.createStore
@@ -14,6 +15,20 @@ fun main() {
     combineExample()
     sealedCombineExample()
     todoExample()
+    pageExample()
+}
+
+private fun pageExample() {
+    val store = createStore(createPageReducer())
+    store.subscribe { println("result: $it") }
+
+    store.pageMapProxy.start()
+
+    store.pageMapProxy.run {
+        start()
+        changePage("pageTwo")
+        start()
+    }
 }
 
 private fun asyncExample() = runBlocking {

@@ -52,7 +52,9 @@ internal class CombinedStateVisitor(
                 processStateLike(
                     kspContext,
                     classDeclaration,
-                    classDeclaration.parseCombinedAnnotation().annotationRep,
+                    classDeclaration.parseCombinedAnnotation().let {
+                        it.annotationRep.copy(actions = it.annotationRep.actions?.plus(it.commonActions ?: emptyList()))
+                    },
                     logger,
                     plugins
                 )
@@ -89,9 +91,12 @@ internal class CombinedStateVisitor(
                     processStateLike(
                         kspContext,
                         parameters,
-                        classDeclaration.parseCombinedAnnotation().annotationRep.copy(
-                            domainClass = proxy
-                        ),
+                        classDeclaration.parseCombinedAnnotation().let {
+                            it.annotationRep.copy(
+                                domainClass = proxy,
+                                actions = it.annotationRep.actions?.plus(it.commonActions ?: emptyList())
+                            )
+                        },
                         logger,
                         plugins
                     )
@@ -109,7 +114,7 @@ private fun generateProxy(proxyName: ClassName, parameters: List<Prop>): Writeab
     val proxyClass = createDataClass(proxyName.simpleName, parameters.map {
         ClassProperty(it.name.asString(), it.type.toClassName())
     }).build()
-    return Writeable { it += proxyClass.toString()}
+    return Writeable { it += proxyClass.toString() }
 }
 
 private fun generateActionExtensions(
@@ -183,55 +188,55 @@ private fun generateCombinedObject(
                 .addModifiers(KModifier.PRIVATE)
                 .returns(ObjectFactory::class.asTypeName().parameterizedBy(domainType))
                 .addStatement("return " +
-                        TypeSpec.anonymousClassBuilder()
-                            .addSuperinterface(
-                                ObjectFactory::class.asTypeName().parameterizedBy(domainType)
-                            )
-                            .addFunction(
-                                FunSpec.builder("construct")
-                                    .addModifiers(KModifier.OVERRIDE)
-                                    .addParameter(
-                                        "content",
-                                        List::class.asTypeName()
-                                            .parameterizedBy(Any::class.asTypeName())
-                                    )
-                                    .addCode(
-                                        """
+                    TypeSpec.anonymousClassBuilder()
+                        .addSuperinterface(
+                            ObjectFactory::class.asTypeName().parameterizedBy(domainType)
+                        )
+                        .addFunction(
+                            FunSpec.builder("construct")
+                                .addModifiers(KModifier.OVERRIDE)
+                                .addParameter(
+                                    "content",
+                                    List::class.asTypeName()
+                                        .parameterizedBy(Any::class.asTypeName())
+                                )
+                                .addCode(
+                                    """
                                     |return ${domainType.canonicalName}(
                                     |  ${
-                                            actionClasses.mapIndexed { index, param -> "content[$index] as ${param.domainClass.canonicalName}" }
-                                                .joinToString(",")
-                                        }
+                                        actionClasses.mapIndexed { index, param -> "content[$index] as ${param.domainClass.canonicalName}" }
+                                            .joinToString(",")
+                                    }
                                     |)
                                     """.trimMargin()
-                                    )
-                                    .returns(domainType)
-                                    .build()
+                                )
+                                .returns(domainType)
+                                .build()
 
-                            )
-                            .addFunction(
-                                FunSpec.builder("destruct")
-                                    .addModifiers(KModifier.OVERRIDE)
-                                    .addTypeVariable(TypeVariableName("T"))
-                                    .returns(TypeVariableName("T"))
-                                    .receiver(domainType)
-                                    .addParameter("index", Int::class)
-                                    .addCode(
-                                        """
+                        )
+                        .addFunction(
+                            FunSpec.builder("destruct")
+                                .addModifiers(KModifier.OVERRIDE)
+                                .addTypeVariable(TypeVariableName("T"))
+                                .returns(TypeVariableName("T"))
+                                .receiver(domainType)
+                                .addParameter("index", Int::class)
+                                .addCode(
+                                    """
                                         |return when(index) {
                                         ${
-                                            List(actionClasses.size) { index ->
-                                                "$index -> component${index + 1}()"
-                                            }.joinToString("\n")
-                                        }
+                                        List(actionClasses.size) { index ->
+                                            "$index -> component${index + 1}()"
+                                        }.joinToString("\n")
+                                    }
                                         |  else -> error("Unexpected index: ${'$'}index")
                                         |} as T
                                     """.trimMargin()
-                                    )
-                                    .build()
-                            )
-                            .build()
-                            .toString()
+                                )
+                                .build()
+                        )
+                        .build()
+                        .toString()
                 )
                 .build()
         )
