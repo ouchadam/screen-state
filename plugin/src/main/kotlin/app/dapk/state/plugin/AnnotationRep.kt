@@ -29,7 +29,7 @@ data class AnnotationRep(
 
     fun starProjected(): TypeName {
         return if (isTyped()) {
-            domainName.parameterizedBy(STAR)
+            domainName.parameterizedBy(types.map { STAR })
         } else {
             domainName
         }
