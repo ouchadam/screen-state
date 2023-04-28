@@ -98,6 +98,7 @@ internal class CombinedStateVisitor(
                         combinedAnnotation.let {
                             it.annotationRep.copy(
                                 domainClass = proxy,
+                                domainName = proxy,
                                 actions = it.annotationRep.actions?.plus(it.commonActions ?: emptyList())
                             )
                         },
@@ -172,7 +173,7 @@ private fun generateCombinedObject(
                 .addParameters(
                     actionClasses.map {
                         ParameterSpec.builder(
-                            it.domainClass.simpleName.decapitalize(),
+                            it.domainName.simpleName.decapitalize(),
                             ReducerFactory::class.asTypeName()
                                 .parameterizedBy(it.resolveClass())
                         ).build()
@@ -185,7 +186,7 @@ private fun generateCombinedObject(
                 .addCode(
                     """
                         return app.dapk.state.combineReducers(factory(), ${
-                        actionClasses.joinToString(",") { it.domainClass.simpleName.decapitalize() }
+                        actionClasses.joinToString(",") { it.domainName.simpleName.decapitalize() }
                     })
                     """.trimIndent()
                 )
@@ -212,7 +213,7 @@ private fun generateCombinedObject(
                                     """
                                     |return ${domainType.canonicalName}(
                                     |  ${
-                                        actionClasses.mapIndexed { index, param -> "content[$index] as ${param.domainClass.canonicalName}" }
+                                        actionClasses.mapIndexed { index, param -> "content[$index] as ${param.domainName.canonicalName}" }
                                             .joinToString(",")
                                     }
                                     |)
@@ -252,7 +253,7 @@ private fun generateCombinedObject(
             val actions = actionClasses.mapNotNull { domain ->
                 domain.actions?.let {
                     ClassProperty(
-                        domain.domainClass.simpleName,
+                        domain.domainName.simpleName,
                         ClassName(
                             PACKAGE, "${domain.resolveSimpleName()}AllActions"
                         )

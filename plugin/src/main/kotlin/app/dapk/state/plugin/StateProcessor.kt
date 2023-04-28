@@ -1,14 +1,14 @@
 package app.dapk.state.plugin
 
+import app.dapk.annotation.CombinedState
+import app.dapk.annotation.State
+import app.dapk.annotation.StateActions
 import app.dapk.extension.Plugin
 import app.dapk.internal.StoreProperty
 import app.dapk.internal.Update
 import app.dapk.internal.UpdateExec
-import app.dapk.annotation.CombinedState
 import app.dapk.state.ExecutionRegistrar
 import app.dapk.state.ReducerBuilder
-import app.dapk.annotation.State
-import app.dapk.annotation.StateActions
 import app.dapk.state.StoreScope
 import com.google.devtools.ksp.processing.CodeGenerator
 import com.google.devtools.ksp.processing.KSPLogger
@@ -19,9 +19,9 @@ import com.google.devtools.ksp.symbol.KSAnnotated
 import com.google.devtools.ksp.symbol.KSClassDeclaration
 import com.google.devtools.ksp.symbol.KSName
 import com.google.devtools.ksp.symbol.KSType
+import com.google.devtools.ksp.symbol.KSTypeParameter
 import com.google.devtools.ksp.symbol.KSVisitor
 import com.google.devtools.ksp.symbol.KSVisitorVoid
-import com.google.devtools.ksp.symbol.Visibility
 import com.google.devtools.ksp.validate
 import com.squareup.kotlinpoet.ClassName
 import com.squareup.kotlinpoet.CodeBlock
@@ -33,8 +33,8 @@ import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
 import com.squareup.kotlinpoet.PropertySpec
 import com.squareup.kotlinpoet.TypeSpec
 import com.squareup.kotlinpoet.asTypeName
-import com.squareup.kotlinpoet.ksp.toKModifier
 import com.squareup.kotlinpoet.ksp.toTypeName
+import com.squareup.kotlinpoet.ksp.toTypeParameterResolver
 import java.util.ServiceLoader
 
 const val PACKAGE = "app.dapk.gen"
@@ -231,7 +231,7 @@ private fun generateExtensions(
         val extension = PropertySpec
             .builder(annotation.simpleName().decapitalize(), ClassName(PACKAGE, type))
             .addVisibility(annotation.visibility)
-            .receiver(StoreScope::class.asTypeName().parameterizedBy(annotation.domainClass))
+            .receiver(StoreScope::class.asTypeName().parameterizedBy(annotation.starProjected()))
             .delegate(
                 CodeBlock.Builder()
                     .beginControlFlow(StoreProperty::class.qualifiedName!!)
@@ -255,18 +255,13 @@ private fun generateUpdateFunctions(
     logger: KSPLogger
 ): List<Writeable> {
     val updaterName = "${stateLike.simpleName().replaceFirstChar { it.titlecase() }}Updater"
-    val publicUpdateApi = TypeSpec.interfaceBuilder(updaterName)
-        .addModifiers(stateLike.visibilityModifier())
+    val publicUpdateApi = stateLike.createInterface(updaterName)
 
-    val publicApiType = ClassName("", updaterName)
-    val internalUpdateApi =
-        TypeSpec.classBuilder("${stateLike.simpleName().replaceFirstChar { it.titlecase() }}UpdaterImpl")
-            .addModifiers(stateLike.visibilityModifier())
+    val publicApiType = stateLike.createTypeName(updaterName)
+    val internalUpdateApi = stateLike.createClass("${stateLike.simpleName().replaceFirstChar { it.titlecase() }}UpdaterImpl")
             .addSuperinterface(publicApiType)
             .addSuperinterface(
-                ClassName("app.dapk.internal", "Collectable").parameterizedBy(
-                    stateLike.domainClass
-                )
+                ClassName("app.dapk.internal", "Collectable").parameterizedBy(stateLike.domainClass)
             )
 
     val collectBuilder = FunSpec
@@ -282,13 +277,17 @@ private fun generateUpdateFunctions(
 
     prop.forEach {
         val propertyName = it.name.getShortName().decapitalize()
-        val propertyType = it.type.toTypeName()
+        val type = when (it.type.declaration is KSTypeParameter) {
+            true -> it.type.toTypeName(stateLike.types.toTypeParameterResolver())
+            false -> it.type.toTypeName()
+        }
+
         val funBuilder = FunSpec
             .builder(propertyName)
             .addParameter(
                 ParameterSpec.builder(
                     propertyName,
-                    propertyType,
+                    type,
                 ).build()
             ).build()
 
@@ -303,7 +302,7 @@ private fun generateUpdateFunctions(
         }
 
         val propertySpec =
-            PropertySpec.builder("_$propertyName", propertyType.copy(nullable = true), PRIVATE)
+            PropertySpec.builder("_$propertyName", type.copy(nullable = true), PRIVATE)
                 .mutable()
                 .initializer("null")
         internalUpdateApi.addProperty(propertySpec.build())
@@ -338,8 +337,7 @@ private fun generateUpdateFunctions(
 
     val internalBuild = internalUpdateApi.build()
 
-    val updateFun = FunSpec.builder("update")
-        .addModifiers(stateLike.visibilityModifier())
+    val updateFun = stateLike.createFunction("update")
         .returns(Update::class.asTypeName().parameterizedBy(stateLike.domainClass))
         .addParameter(
             "block",
@@ -347,23 +345,22 @@ private fun generateUpdateFunctions(
         )
         .addCode(
             """
-                return ${internalBuild.name!!}().apply(block).collect()
+                return ${internalBuild.nameWithTypes()}().apply(block).collect()
             """.trimIndent()
         )
         .build()
 
     logger.warn(internalBuild.toString())
 
-    val receiver = ClassName("", "${stateLike.simpleName()}Updater")
+    val receiver = stateLike.createTypeName("${stateLike.simpleName()}Updater")
     val executionExtensions = listOf(
-        FunSpec.builder("update")
-            .addModifiers(stateLike.visibilityModifier())
+        stateLike.createFunction("update")
             .receiver(ExecutionRegistrar::class.asTypeName().parameterizedBy(stateLike.domainClass))
             .addParameter(
                 "block",
                 LambdaTypeName.get(receiver, emptyList(), Unit::class.asTypeName())
             )
-            .addStatement("register(${UpdateExec::class.qualifiedName}(${receiver.simpleName}Impl().apply(block).collect()))")
+            .addStatement("register(${UpdateExec::class.qualifiedName}(${internalBuild.nameWithTypes()}().apply(block).collect()))")
             .build(),
     )
 

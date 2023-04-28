@@ -3,6 +3,7 @@ package app.dapk.thunk
 import app.dapk.extension.Plugin
 import app.dapk.state.plugin.AnnotationRep
 import app.dapk.state.plugin.Writeable
+import app.dapk.state.plugin.createFunction
 import app.dapk.state.plugin.plusAssign
 import com.google.devtools.ksp.processing.KSPLogger
 import com.squareup.kotlinpoet.ClassName
@@ -18,10 +19,10 @@ class ThunkPluginExtension : Plugin {
         return if (representation.isObject) {
             Writeable {  }
         } else {
-            val receiver = ClassName("", "${representation.simpleName()}Updater")
+            val receiver = representation.createTypeName("${representation.simpleName()}Updater")
+            val receiverImpl = representation.createTypeName("${representation.simpleName()}UpdaterImpl")
             Writeable {
-                it += FunSpec.builder("thunkUpdate")
-                    .addModifiers(representation.visibilityModifier())
+                it += representation.createFunction("thunkUpdate")
                     .receiver(
                         ThunkExecutionContext::class.asTypeName()
                             .parameterizedBy(representation.domainClass)
@@ -30,7 +31,7 @@ class ThunkPluginExtension : Plugin {
                         "block",
                         LambdaTypeName.get(receiver, emptyList(), Unit::class.asTypeName())
                     )
-                    .addStatement("register(${receiver.simpleName}Impl().apply(block).collect())")
+                    .addStatement("register(${receiverImpl}().apply(block).collect())")
                     .build()
                     .toString()
             }

@@ -17,8 +17,11 @@ import com.squareup.kotlinpoet.FunSpec
 import com.squareup.kotlinpoet.KModifier
 import com.squareup.kotlinpoet.KModifier.*
 import com.squareup.kotlinpoet.ParameterSpec
+import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
 import com.squareup.kotlinpoet.PropertySpec
+import com.squareup.kotlinpoet.TypeName
 import com.squareup.kotlinpoet.TypeSpec
+import com.squareup.kotlinpoet.TypeVariableName
 import com.squareup.kotlinpoet.ksp.toClassName
 import com.squareup.kotlinpoet.ksp.toKModifier
 import java.io.OutputStream
@@ -32,7 +35,9 @@ fun KSClassDeclaration.parseStateAnnotation(): AnnotationRep {
     val parentDeclaration = this.parentDeclaration?.let { it as? KSClassDeclaration }
 
     return AnnotationRep(
-        domainClass = domainType,
+        domainClass = this.typedName(),
+        domainName = domainType,
+        types = this.typeParameters,
         visibility = this.getVisibility(),
         parentDeclaration = parentDeclaration,
         isObject = this.classKind == ClassKind.OBJECT,
@@ -43,12 +48,24 @@ fun KSClassDeclaration.parseStateAnnotation(): AnnotationRep {
     )
 }
 
+
+private fun KSClassDeclaration.typedName(): TypeName {
+    val domainType = this.toClassName()
+    return when(this.typeParameters.isEmpty()) {
+        true -> domainType
+        false -> domainType.parameterizedBy(this.typeParameters.map { TypeVariableName(it.simpleName.asString()) })
+    }
+}
+
+
 fun KSClassDeclaration.parseCombinedAnnotation(): CombinedRep {
     val annotation = this.annotations.first { it.shortName.asString() == CombinedState::class.simpleName }
     val domainType = this.toClassName()
     return CombinedRep(
         AnnotationRep(
-            domainClass = domainType,
+            domainClass = this.typedName(),
+            domainName = domainType,
+            types = this.typeParameters,
             visibility = this.getVisibility(),
             parentDeclaration = this.parentDeclaration?.let { it as? KSClassDeclaration },
             isObject = this.classKind == ClassKind.OBJECT,
@@ -138,5 +155,51 @@ fun KspContext.createFile(fileName: String, packageName: String = PACKAGE, block
 fun PropertySpec.Builder.addVisibility(visibility: Visibility) = this.apply {
     visibility.toKModifier().takeIf { it != PUBLIC }?.let {
         addModifiers(it)
+    }
+}
+
+
+fun AnnotationRep.createInterface(name: String): TypeSpec.Builder {
+    return TypeSpec.interfaceBuilder(name)
+        .apply {
+            visibility.toKModifier().takeIf { it != PUBLIC }?.let {
+                addModifiers(it)
+            }
+            if (isTyped()) {
+                addTypeVariables(types.map { TypeVariableName(it.simpleName.asString()) })
+            }
+        }
+        .addModifiers(this.visibilityModifier())
+}
+
+fun AnnotationRep.createClass(name: String): TypeSpec.Builder {
+    return TypeSpec.classBuilder(name)
+        .apply {
+            visibility.toKModifier().takeIf { it != PUBLIC }?.let {
+                addModifiers(it)
+            }
+            if (isTyped()) {
+                addTypeVariables(types.map { TypeVariableName(it.simpleName.asString()) })
+            }
+        }
+}
+
+fun AnnotationRep.createFunction(name: String): FunSpec.Builder {
+    return FunSpec.builder(name)
+        .apply {
+            visibility.toKModifier().takeIf { it != PUBLIC }?.let {
+                addModifiers(it)
+            }
+            if (isTyped()) {
+                addTypeVariables(types.map { TypeVariableName(it.simpleName.asString()) })
+            }
+        }
+}
+
+fun TypeSpec.nameWithTypes(): String {
+    return if (typeVariables.isEmpty()) {
+        this.name!!
+    } else {
+        "${this.name}${this.typeVariables.joinToString(prefix = "<", separator = ",", postfix = ">")}"
     }
 }
