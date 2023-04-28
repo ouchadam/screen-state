@@ -1,6 +1,7 @@
 package app.dapk.state.plugin
 
 import app.dapk.extension.Plugin
+import app.dapk.internal.StoreProperty
 import app.dapk.state.ObjectFactory
 import app.dapk.state.ReducerFactory
 import app.dapk.state.StoreScope
@@ -126,7 +127,7 @@ private fun generateActionExtensions(
             .receiver(StoreScope::class.asTypeName().parameterizedBy(stateType))
             .delegate(
                 CodeBlock.Builder()
-                    .beginControlFlow("app.dapk.internal.StoreProperty")
+                    .beginControlFlow(StoreProperty::class.qualifiedName.toString())
                     .add(
                         """
                             |${actionsType.canonicalName}(

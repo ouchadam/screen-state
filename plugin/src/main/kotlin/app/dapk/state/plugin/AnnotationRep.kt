@@ -31,10 +31,7 @@ data class AnnotationRep(
     }
 }
 
-
 data class ActionFunction(val name: String, val arguments: List<KSValueParameter>)
-
-
 
 data class ActionRep(
     val domainClass: ClassName,
