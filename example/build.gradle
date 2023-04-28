@@ -9,7 +9,7 @@ application {
 }
 
 dependencies {
-    implementation project(":annotations")
+    implementation project(":state-v2")
     implementation project(":thunk")
     implementation libs.kotlin.coroutines
     ksp project(":plugin")
