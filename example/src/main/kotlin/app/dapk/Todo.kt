@@ -7,6 +7,7 @@ import app.dapk.gen.edit
 import app.dapk.gen.markCompleted
 import app.dapk.gen.update
 import app.dapk.annotation.State
+import app.dapk.annotation.StateActions
 import app.dapk.state.createReducer
 
 @State(actions = [TodoActions::class])
@@ -14,7 +15,7 @@ data class TodoState(
     val todo: List<Todo>,
     val completed: List<Todo>,
 ) {
-    interface TodoActions {
+    @StateActions interface TodoActions {
         fun add(content: String)
         fun markCompleted(id: String)
         fun delete(id: String)

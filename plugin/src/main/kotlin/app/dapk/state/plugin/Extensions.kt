@@ -31,20 +31,34 @@ fun KSClassDeclaration.parseStateAnnotations(): AnnotationRep {
     return annotation.arguments.fold(initial) { acc, curr ->
         when (curr.name?.getShortName()) {
             "actions" -> {
-                acc.copy(actions = (curr.value as ArrayList<KSType>).toList().toActionFunctions())
+                acc.copy(
+                    actions = (curr.value as ArrayList<KSType>).toList().map {
+                        (it.declaration as KSClassDeclaration).parseStateActionAnnotation()
+                    }
+                )
             }
-
             else -> acc
         }
     }
 }
 
+fun KSClassDeclaration.parseStateActionAnnotation(): ActionRep {
+    val actionClassName = this.toClassName()
+    return ActionRep(
+        domainClass = actionClassName,
+        parentClass = this.parentDeclaration?.let { it as? KSClassDeclaration }?.toClassName(),
+        functions = this.getActionFunctions(),
+    )
+}
+
 private fun List<KSType>.toActionFunctions() = this.associateWith {
     val declaration = it.declaration as KSClassDeclaration
-    declaration.getDeclaredFunctions()
-        .map { ActionFunction(it.simpleName.getShortName(), it.parameters) }
-        .toList()
+    declaration.getActionFunctions()
 }
+
+fun KSClassDeclaration.getActionFunctions() = this.getDeclaredFunctions()
+    .map { ActionFunction(it.simpleName.getShortName(), it.parameters) }
+    .toList()
 
 fun KSClassDeclaration.parseConstructor(): List<Prop> {
     return this.primaryConstructor?.parameters?.mapNotNull {

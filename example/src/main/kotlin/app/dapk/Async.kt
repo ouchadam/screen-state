@@ -5,6 +5,7 @@ import app.dapk.gen.observeChanges
 import app.dapk.gen.update
 import app.dapk.gen.updateContent
 import app.dapk.annotation.State
+import app.dapk.annotation.StateActions
 import app.dapk.state.createReducer
 import app.dapk.thunk.thunk
 import kotlinx.coroutines.flow.onEach
@@ -15,7 +16,7 @@ private val database = Database()
 data class AsyncState(
     val content: List<String>
 ) {
-    interface Actions {
+    @StateActions interface Actions {
         fun observeChanges()
         fun updateContent(content: List<String>)
     }

@@ -6,6 +6,7 @@ import app.dapk.gen.update
 import app.dapk.gen.updateContent
 import app.dapk.annotation.CombinedState
 import app.dapk.annotation.State
+import app.dapk.annotation.StateActions
 import app.dapk.state.createReducer
 import app.dapk.state.outer
 
@@ -14,12 +15,12 @@ sealed interface SealedAllState {
     @State
     object StateThree : SealedAllState
     @State(actions = [StateFour.Actions::class]) data class StateFour(val content: String): SealedAllState {
-        interface Actions {
+        @StateActions interface Actions {
             fun updateContent(content: String)
         }
     }
 
-    interface Actions {
+    @StateActions interface Actions {
         fun randomize()
     }
 }

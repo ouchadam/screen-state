@@ -8,10 +8,11 @@ import app.dapk.gen.updateId
 import app.dapk.gen.updateName
 import app.dapk.annotation.CombinedState
 import app.dapk.annotation.State
+import app.dapk.annotation.StateActions
 import app.dapk.state.createReducer
 import app.dapk.state.outer
 
-interface CommonActions {
+@StateActions interface CommonActions {
     fun destroy()
 }
 
@@ -19,7 +20,7 @@ interface CommonActions {
 data class StateOne(
     val id: String
 ) {
-    interface Actions {
+    @StateActions interface Actions {
         fun updateId(id: String)
     }
 }
@@ -28,7 +29,7 @@ data class StateOne(
 data class StateTwo(
     val name: String
 ) {
-    interface Actions {
+    @StateActions interface Actions {
         fun updateName(name: String)
     }
 }
@@ -38,11 +39,10 @@ data class AllState(
     val stateOne: StateOne,
     val stateTwo: StateTwo,
 ) {
-    interface Actions {
+    @StateActions interface Actions {
         fun randomize()
     }
 }
-
 
 val combinedReducer = AllState
     .fromReducers(

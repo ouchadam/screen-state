@@ -8,6 +8,7 @@ import app.dapk.annotation.CombinedState
 import app.dapk.state.ExecutionRegistrar
 import app.dapk.state.ReducerBuilder
 import app.dapk.annotation.State
+import app.dapk.annotation.StateActions
 import app.dapk.state.StoreScope
 import com.google.devtools.ksp.processing.CodeGenerator
 import com.google.devtools.ksp.processing.KSPLogger
@@ -31,7 +32,6 @@ import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
 import com.squareup.kotlinpoet.PropertySpec
 import com.squareup.kotlinpoet.TypeSpec
 import com.squareup.kotlinpoet.asTypeName
-import com.squareup.kotlinpoet.ksp.toClassName
 import com.squareup.kotlinpoet.ksp.toTypeName
 import java.util.ServiceLoader
 
@@ -49,6 +49,7 @@ class StateProcessor(
     override fun process(resolver: Resolver): List<KSAnnotated> {
         val context = KspContext(codeGenerator, resolver)
         return buildList {
+            addAll(processAnnotation<StateActions>(context) { StateActionsVisitor(context, logger, plugins) })
             addAll(processAnnotation<CombinedState>(context) { CombinedStateVisitor(context, logger, plugins) })
             addAll(processAnnotation<State>(context) { StateVisitor(context, logger, plugins) })
         }
@@ -76,6 +77,33 @@ data class Prop(
     val name: KSName,
     val type: KSType,
 )
+
+internal class StateActionsVisitor(
+    private val kspContext: KspContext,
+    private val logger: KSPLogger,
+    private val plugins: List<Plugin>,
+) : KSVisitorVoid() {
+
+    override fun visitClassDeclaration(classDeclaration: KSClassDeclaration, data: Unit) {
+        when (classDeclaration.classKind) {
+            INTERFACE -> {
+                val actionRep = classDeclaration.parseStateActionAnnotation()
+                kspContext.createFile(
+                    actionRep.simpleName(),
+                    actionRep.domainClass.packageName,
+                ) {
+                    listOf(
+                        Writeable { it += generateActionClassesFromInterface(actionRep).toString() }
+                    )
+                }
+            }
+
+            else -> {
+                logger.error("Unexpected annotation class: ${classDeclaration.classKind}")
+            }
+        }
+    }
+}
 
 internal class StateVisitor(
     private val kspContext: KspContext,
@@ -127,7 +155,6 @@ fun processStateLike(
             if (!stateLike.isObject) {
                 addAll(generateUpdateFunctions(stateLike, parameters, logger))
             }
-            addAll(generateActions(stateLike))
             addAll(generateExtensions(stateLike, logger))
             addAll(plugins.map { it.run(logger, stateLike) })
         }
@@ -138,14 +165,12 @@ private fun generateExtensions(
     annotation: AnnotationRep,
     logger: KSPLogger
 ): List<Writeable> {
-    val actionExtensions = annotation.actions?.map { (key, values) ->
-        values.map {
-            val actionType =
-                ClassName(PACKAGE, "${annotation.simpleName()}Actions.${it.name.capitalize()}")
-
+    val actionExtensions = annotation.actions?.map { actionRep ->
+        actionRep.functions.map {
+            val actionType = actionRep.resolveGeneratedAction(it)
             val listOf: List<ParameterSpec> = listOf(
                 ParameterSpec("", annotation.domainClass),
-                ParameterSpec("", actionType.topLevelClassName())
+                ParameterSpec("", actionRep.resolveGeneratedAction(it))
             )
             FunSpec.builder(it.name)
                 .receiver(ReducerBuilder::class.asTypeName().parameterizedBy(annotation.domainClass))
@@ -160,44 +185,43 @@ private fun generateExtensions(
                 )
                 .addStatement("app.dapk.internal.registerAction(this, ${actionType}::class, block)")
                 .build()
-
         }
     }?.flatten().orEmpty()
 
     val dispatcher = annotation.actions?.let {
         val type = "${annotation.simpleName()}AllActions"
         val allActionsType = TypeSpec.interfaceBuilder(type)
-            .addSuperinterfaces(it.keys.map { it.toClassName() })
+            .addSuperinterfaces(it.map { it.domainClass })
             .build()
 
         val allActionsImpl = TypeSpec.anonymousClassBuilder()
             .addSuperinterface(ClassName(PACKAGE, type))
 
-        it.values.flatten().forEach { action ->
-            val actionType = ClassName(
-                PACKAGE,
-                "${annotation.simpleName()}Actions.${action.name.capitalize()}"
-            )
+        it.forEach { actionRep ->
+            val implementationFunctions = actionRep.functions.map {
+                val actionType = actionRep.resolveGeneratedAction(it)
 
-            val funcBuilder = FunSpec.builder(action.name)
-                .addModifiers(OVERRIDE)
+                val funcBuilder = FunSpec.builder(it.name)
+                    .addModifiers(OVERRIDE)
 
-            when {
-                action.arguments.isEmpty() -> funcBuilder.addStatement("it.dispatch($actionType)")
-                else -> {
-                    action.arguments.forEach {
-                        funcBuilder.addParameter(it.name!!.getShortName(), it.type.toTypeName())
+                when {
+                    it.arguments.isEmpty() -> funcBuilder.addStatement("it.dispatch($actionType)")
+                    else -> {
+                        it.arguments.forEach {
+                            funcBuilder.addParameter(it.name!!.getShortName(), it.type.toTypeName())
+                        }
+                        funcBuilder.addStatement(
+                            "it.dispatch($actionType(${
+                                it.arguments.joinToString(separator = ",") {
+                                    it.name!!.getShortName()
+                                }
+                            }))"
+                        )
                     }
-                    funcBuilder.addStatement(
-                        "it.dispatch($actionType(${
-                            action.arguments.joinToString(separator = ",") { 
-                                it.name!!.getShortName() 
-                            }
-                        }))"
-                    )
                 }
+                funcBuilder.build()
             }
-            allActionsImpl.addFunction(funcBuilder.build())
+            allActionsImpl.addFunctions(implementationFunctions)
         }
 
         val extension = PropertySpec
@@ -214,13 +238,10 @@ private fun generateExtensions(
         listOf(extension, allActionsType)
     }.orEmpty()
 
-
     return buildList {
         addAll(actionExtensions)
         addAll(dispatcher)
-    }.map { extension ->
-        Writeable { it += extension.toString() }
-    }
+    }.toWriteable()
 }
 
 private fun generateUpdateFunctions(
@@ -342,7 +363,9 @@ private fun generateUpdateFunctions(
         add(internalBuild)
         add(updateFun)
         addAll(executionExtensions)
-    }.map { content ->
-        Writeable { it += content.toString() }
-    }
+    }.toWriteable()
+}
+
+private fun List<Any>.toWriteable() = this.map { content ->
+    Writeable { it += content.toString() }
 }

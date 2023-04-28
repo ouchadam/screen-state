@@ -9,13 +9,13 @@ import com.squareup.kotlinpoet.PropertySpec
 import com.squareup.kotlinpoet.TypeSpec
 import com.squareup.kotlinpoet.ksp.toTypeName
 
-fun generateActions(annotation: AnnotationRep): List<Writeable> {
-    val interfaceName = ClassName(PACKAGE, "${annotation.simpleName()}Actions")
+fun generateActionClassesFromInterface(actionRep: ActionRep): TypeSpec {
+    val interfaceName = ClassName(actionRep.domainClass.packageName, actionRep.simpleName())
     val generatedActionsInterface = TypeSpec.interfaceBuilder(interfaceName)
         .addModifiers(SEALED)
         .addSuperinterface(Action::class)
 
-    annotation.actions?.values?.flatten()?.map {
+    actionRep.functions.map {
         val name = it.name.capitalize()
         when {
             it.arguments.isEmpty() -> TypeSpec.objectBuilder(name)
@@ -41,11 +41,6 @@ fun generateActions(annotation: AnnotationRep): List<Writeable> {
                     }
                 )
         }.addSuperinterface(interfaceName).build()
-    }?.forEach {
-        generatedActionsInterface.addType(it)
-    }
-
-    return listOf(
-        Writeable { it += generatedActionsInterface.build().toString() }
-    )
+    }.forEach { generatedActionsInterface.addType(it) }
+    return generatedActionsInterface.build()
 }
