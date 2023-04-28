@@ -1,10 +1,13 @@
 package app.dapk.state.plugin
 
+import app.dapk.annotation.CombinedState
+import app.dapk.annotation.State
 import com.google.devtools.ksp.getDeclaredFunctions
 import com.google.devtools.ksp.processing.CodeGenerator
 import com.google.devtools.ksp.processing.Dependencies
 import com.google.devtools.ksp.processing.Resolver
 import com.google.devtools.ksp.symbol.ClassKind
+import com.google.devtools.ksp.symbol.KSAnnotation
 import com.google.devtools.ksp.symbol.KSClassDeclaration
 import com.google.devtools.ksp.symbol.KSType
 import com.squareup.kotlinpoet.ClassName
@@ -16,31 +19,45 @@ import com.squareup.kotlinpoet.TypeSpec
 import com.squareup.kotlinpoet.ksp.toClassName
 import java.io.OutputStream
 
-fun KSClassDeclaration.parseStateAnnotations(): AnnotationRep {
+fun KSClassDeclaration.parseStateAnnotation(): AnnotationRep {
     val annotation = this.annotations.first {
-        it.shortName.asString() == "State" || it.shortName.asString() == "CombinedState"
+        it.shortName.asString() == State::class.simpleName ||
+            it.shortName.asString() == CombinedState::class.simpleName
     }
     val domainType = this.toClassName()
-    val initial = AnnotationRep(
+    val parentDeclaration = this.parentDeclaration?.let { it as? KSClassDeclaration }
+    return AnnotationRep(
         domainClass = domainType,
-        parentClass = this.parentDeclaration?.let { it as? KSClassDeclaration }?.toClassName(),
+        parentDeclaration = parentDeclaration,
         isObject = this.classKind == ClassKind.OBJECT,
-        actions = null,
+        actions = annotation.parseActionsArgument("actions")?.plus(
+            parentDeclaration?.parseCombinedAnnotation()?.commonActions ?: emptyList()
+        ),
         isProxy = this.getSealedSubclasses().iterator().hasNext()
     )
-    return annotation.arguments.fold(initial) { acc, curr ->
-        when (curr.name?.getShortName()) {
-            "actions" -> {
-                acc.copy(
-                    actions = (curr.value as ArrayList<KSType>).toList().map {
-                        (it.declaration as KSClassDeclaration).parseStateActionAnnotation()
-                    }
-                )
-            }
-            else -> acc
+}
+
+fun KSClassDeclaration.parseCombinedAnnotation(): CombinedRep {
+    val annotation = this.annotations.first { it.shortName.asString() == CombinedState::class.simpleName }
+    val domainType = this.toClassName()
+    return CombinedRep(
+        AnnotationRep(
+            domainClass = domainType,
+            parentDeclaration = this.parentDeclaration?.let { it as? KSClassDeclaration },
+            isObject = this.classKind == ClassKind.OBJECT,
+            actions = annotation.parseActionsArgument("actions"),
+            isProxy = this.getSealedSubclasses().iterator().hasNext()
+        ),
+        commonActions = annotation.parseActionsArgument("commonActions")
+    )
+}
+
+private fun KSAnnotation.parseActionsArgument(argumentName: String) = this.arguments
+    .firstOrNull { it.name?.getShortName() == argumentName }?.let { firstOrNull ->
+        (firstOrNull.value as ArrayList<KSType>).toList().map {
+            (it.declaration as KSClassDeclaration).parseStateActionAnnotation()
         }
     }
-}
 
 fun KSClassDeclaration.parseStateActionAnnotation(): ActionRep {
     val actionClassName = this.toClassName()
@@ -49,11 +66,6 @@ fun KSClassDeclaration.parseStateActionAnnotation(): ActionRep {
         parentClass = this.parentDeclaration?.let { it as? KSClassDeclaration }?.toClassName(),
         functions = this.getActionFunctions(),
     )
-}
-
-private fun List<KSType>.toActionFunctions() = this.associateWith {
-    val declaration = it.declaration as KSClassDeclaration
-    declaration.getActionFunctions()
 }
 
 fun KSClassDeclaration.getActionFunctions() = this.getDeclaredFunctions()

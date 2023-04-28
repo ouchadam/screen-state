@@ -35,7 +35,7 @@ internal class CombinedStateVisitor(
 
                 kspContext.createFile(fileName = "${className}CombinedGenerated") {
                     val actionClasses = parameters.map { param ->
-                        (param.type.declaration as KSClassDeclaration).parseStateAnnotations()
+                        (param.type.declaration as KSClassDeclaration).parseStateAnnotation()
                     }
 
                     val domainType = classDeclaration.toClassName()
@@ -52,7 +52,7 @@ internal class CombinedStateVisitor(
                 processStateLike(
                     kspContext,
                     classDeclaration,
-                    classDeclaration.parseStateAnnotations(),
+                    classDeclaration.parseCombinedAnnotation().annotationRep,
                     logger,
                     plugins
                 )
@@ -68,7 +68,7 @@ internal class CombinedStateVisitor(
 
                     val proxy = ClassName(PACKAGE, "${className}Proxy")
                     val toList = sealedSubclasses.toList()
-                    val actionClasses = toList.map { it.parseStateAnnotations() }
+                    val actionClasses = toList.map { it.parseStateAnnotation() }
 
                     val parameters = toList.map {
                         Prop(it.simpleName, it.asStarProjectedType())
@@ -89,7 +89,7 @@ internal class CombinedStateVisitor(
                     processStateLike(
                         kspContext,
                         parameters,
-                        classDeclaration.parseStateAnnotations().copy(
+                        classDeclaration.parseCombinedAnnotation().annotationRep.copy(
                             domainClass = proxy
                         ),
                         logger,
@@ -103,7 +103,6 @@ internal class CombinedStateVisitor(
             }
         }
     }
-
 }
 
 private fun generateProxy(proxyName: ClassName, parameters: List<Prop>): Writeable {

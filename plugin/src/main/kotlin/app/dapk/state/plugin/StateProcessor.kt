@@ -117,7 +117,7 @@ internal class StateVisitor(
                 processStateLike(
                     kspContext,
                     classDeclaration,
-                    classDeclaration.parseStateAnnotations(),
+                    classDeclaration.parseStateAnnotation(),
                     logger,
                     plugins
                 )
