@@ -6,10 +6,7 @@ import app.dapk.gen.asyncState
 import app.dapk.gen.sealedAllStateProxy
 import app.dapk.gen.todoState
 import app.dapk.state.createStore
-import app.dapk.thunk.ThunkPluginExtension
 import app.dapk.thunk.thunk
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 
 fun main() {

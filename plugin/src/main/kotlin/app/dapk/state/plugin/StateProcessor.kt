@@ -135,49 +135,6 @@ fun processStateLike(
     }
 }
 
-private fun generateActions(
-    annotation: AnnotationRep
-): List<Writeable> {
-    val interfaceName = ClassName(PACKAGE, "${annotation.simpleName()}Actions")
-    val generatedActionsInterface = TypeSpec.interfaceBuilder(interfaceName)
-        .addModifiers(SEALED)
-        .addSuperinterface(Action::class)
-
-    annotation.actions?.values?.flatten()?.map {
-        val name = it.name.capitalize()
-        when {
-            it.arguments.isEmpty() -> TypeSpec.objectBuilder(name)
-            else -> TypeSpec.classBuilder(name)
-                .addModifiers(DATA)
-                .primaryConstructor(
-                    FunSpec.constructorBuilder()
-                        .addParameters(
-                            it.arguments.map {
-                                ParameterSpec.builder(
-                                    it.name?.getShortName()?.decapitalize() ?: "value",
-                                    it.type.toTypeName()
-                                ).build()
-                            }
-                        ).build()
-                )
-                .addProperties(
-                    it.arguments.map {
-                        val propName = it.name?.getShortName()?.decapitalize() ?: "value"
-                        PropertySpec.builder(propName, it.type.toTypeName())
-                            .initializer(propName)
-                            .build()
-                    }
-                )
-        }.addSuperinterface(interfaceName).build()
-    }?.forEach {
-        generatedActionsInterface.addType(it)
-    }
-
-    return listOf(
-        Writeable { it += generatedActionsInterface.build().toString() }
-    )
-}
-
 private fun generateExtensions(
     annotation: AnnotationRep,
     logger: KSPLogger

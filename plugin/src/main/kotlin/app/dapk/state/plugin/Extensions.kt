@@ -91,16 +91,13 @@ class KspContext(
     val resolver: Resolver,
 )
 
-fun KspContext.createFile(fileName:String, block: () -> List<Writeable>) {
+fun KspContext.createFile(fileName: String, packageName: String = PACKAGE, block: () -> List<Writeable>) {
     val file = codeGenerator.createNewFile(
-        dependencies = Dependencies(
-            false,
-            *resolver.getAllFiles().toList().toTypedArray()
-        ),
-        packageName = "app.dapk.gen",
+        dependencies = Dependencies(false, *resolver.getAllFiles().toList().toTypedArray()),
+        packageName = packageName,
         fileName = fileName
     )
 
-    file += "package app.dapk.gen\n"
+    file += "package $packageName\n"
     file.use { block().forEach { it.writeTo(file) } }
 }
