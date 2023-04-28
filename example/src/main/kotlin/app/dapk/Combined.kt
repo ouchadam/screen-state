@@ -1,11 +1,6 @@
 package app.dapk
 
-import app.dapk.gen.AllState
-import app.dapk.gen.actions
-import app.dapk.gen.randomize
-import app.dapk.gen.update
-import app.dapk.gen.updateId
-import app.dapk.gen.updateName
+import app.dapk.AllState.*
 import app.dapk.annotation.CombinedState
 import app.dapk.annotation.State
 import app.dapk.annotation.StateActions
@@ -34,7 +29,7 @@ data class StateTwo(
     }
 }
 
-@CombinedState(actions = [app.dapk.AllState.Actions::class])
+@CombinedState(actions = [Actions::class])
 data class AllState(
     val stateOne: StateOne,
     val stateTwo: StateTwo,
@@ -44,7 +39,7 @@ data class AllState(
     }
 }
 
-val combinedReducer = AllState
+val combinedReducer = CombineAllState
     .fromReducers(
         stateOne = createReducer(initialState = StateOne(id = "")) {
             updateId { _, updateId -> update { id(updateId.id) } }

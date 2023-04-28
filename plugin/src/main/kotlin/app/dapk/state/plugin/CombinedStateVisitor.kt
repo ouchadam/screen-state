@@ -34,17 +34,18 @@ internal class CombinedStateVisitor(
                 val className = classDeclaration.simpleName.asString()
                 val combinedAnnotation = classDeclaration.parseCombinedAnnotation()
 
-                kspContext.createFile(fileName = "${className}CombinedGenerated") {
+                kspContext.createFile(packageName = classDeclaration.packageName.asString(), fileName = "${className}CombinedGenerated") {
                     val actionClasses = parameters.map { param ->
                         (param.type.declaration as KSClassDeclaration).parseStateAnnotation()
                     }
 
                     val domainType = classDeclaration.toClassName()
+                    val objectNamespace = "Combine${domainType.simpleName}"
                     listOf(
-                        generateCombinedObject(domainType.simpleName, domainType, combinedAnnotation, actionClasses),
+                        generateCombinedObject(objectNamespace, domainType, combinedAnnotation, actionClasses),
                         generateActionExtensions(
                             domainType,
-                            ClassName(PACKAGE, className),
+                            ClassName(classDeclaration.packageName.asString(), objectNamespace),
                             combinedAnnotation,
                             actionClasses,
                         )
@@ -71,7 +72,7 @@ internal class CombinedStateVisitor(
                 } else {
                     val className = classDeclaration.simpleName.asString()
 
-                    val proxy = ClassName(PACKAGE, "${className}Proxy")
+                    val proxy = ClassName(classDeclaration.packageName.asString(), "${className}Proxy")
                     val toList = sealedSubclasses.toList()
                     val actionClasses = toList.map { it.parseStateAnnotation() }
 
@@ -79,13 +80,17 @@ internal class CombinedStateVisitor(
                         Prop(it.simpleName, it.asStarProjectedType())
                     }
 
-                    kspContext.createFile(fileName = "${className}CombinedGenerated") {
+                    kspContext.createFile(
+                        packageName = classDeclaration.packageName.asString(),
+                        fileName = "${className}CombinedGenerated"
+                    ) {
+                        val objectNamespace = "Combine${className}"
                         listOf(
                             generateProxy(proxy, parameters),
-                            generateCombinedObject(className, proxy, combinedAnnotation, actionClasses),
+                            generateCombinedObject(objectNamespace, proxy, combinedAnnotation, actionClasses),
                             generateActionExtensions(
                                 proxy,
-                                ClassName(PACKAGE, className),
+                                ClassName(classDeclaration.packageName.asString(), objectNamespace),
                                 combinedAnnotation,
                                 actionClasses,
                             )
@@ -255,7 +260,7 @@ private fun generateCombinedObject(
                     ClassProperty(
                         domain.domainName.simpleName,
                         ClassName(
-                            PACKAGE, "${domain.resolveSimpleName()}AllActions"
+                            domain.domainName.packageName, "${domain.resolveSimpleName()}AllActions"
                         )
                     )
                 }

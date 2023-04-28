@@ -3,10 +3,6 @@ package app.dapk
 import app.dapk.annotation.CombinedState
 import app.dapk.annotation.State
 import app.dapk.annotation.StateActions
-import app.dapk.gen.actions
-import app.dapk.gen.randomize
-import app.dapk.gen.update
-import app.dapk.gen.updateContent
 import app.dapk.state.createReducer
 import app.dapk.state.outer
 
@@ -24,7 +20,7 @@ sealed interface SealedAllState {
     }
 }
 
-val sealedCombinedReducer = app.dapk.gen.SealedAllState
+val sealedCombinedReducer = CombineSealedAllState
     .fromReducers(
         stateThree = createReducer(initialState = SealedAllState.StateThree),
         stateFour = createReducer(initialState = SealedAllState.StateFour(content = "")) {

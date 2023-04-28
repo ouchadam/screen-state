@@ -43,7 +43,7 @@ data class AnnotationRep(
 
     fun resolveClass(): ClassName {
         return when (isProxy) {
-            true -> ClassName(PACKAGE, "${domainName.simpleName}Proxy")
+            true -> ClassName(domainName.packageName, "${domainName.simpleName}Proxy")
             false -> domainName
         }
     }
@@ -57,7 +57,7 @@ data class AnnotationRep(
     }
 
     fun createTypeName(name: String): TypeName {
-        return ClassName(PACKAGE, name).let {
+        return ClassName(domainName.packageName, name).let {
             if (isTyped()) {
                 it.parameterizedBy(types.map { TypeVariableName(it.simpleName.asString()) })
             } else {

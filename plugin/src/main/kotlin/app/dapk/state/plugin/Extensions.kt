@@ -141,7 +141,7 @@ class KspContext(
     val resolver: Resolver,
 )
 
-fun KspContext.createFile(fileName: String, packageName: String = PACKAGE, block: () -> List<Writeable>) {
+fun KspContext.createFile(fileName: String, packageName: String, block: () -> List<Writeable>) {
     val file = codeGenerator.createNewFile(
         dependencies = Dependencies(false, *resolver.getAllFiles().toList().toTypedArray()),
         packageName = packageName,

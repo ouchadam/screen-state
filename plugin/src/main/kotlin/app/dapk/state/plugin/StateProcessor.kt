@@ -37,8 +37,6 @@ import com.squareup.kotlinpoet.ksp.toTypeName
 import com.squareup.kotlinpoet.ksp.toTypeParameterResolver
 import java.util.ServiceLoader
 
-const val PACKAGE = "app.dapk.gen"
-
 class StateProcessor(
     private val codeGenerator: CodeGenerator,
     private val logger: KSPLogger,
@@ -152,7 +150,7 @@ fun processStateLike(
     logger: KSPLogger,
     plugins: List<Plugin>
 ) {
-    kspContext.createFile(fileName = "${stateLike.simpleName()}Generated") {
+    kspContext.createFile(packageName = stateLike.domainName.packageName, fileName = "${stateLike.simpleName()}Generated") {
         buildList {
             if (!stateLike.isObject) {
                 addAll(generateUpdateFunctions(stateLike, parameters, logger))
@@ -199,7 +197,7 @@ private fun generateExtensions(
             .build()
 
         val allActionsImpl = TypeSpec.anonymousClassBuilder()
-            .addSuperinterface(ClassName(PACKAGE, type))
+            .addSuperinterface(ClassName(annotation.domainName.packageName, type))
 
         it.forEach { actionRep ->
             val implementationFunctions = actionRep.functions.map {
@@ -229,7 +227,7 @@ private fun generateExtensions(
         }
 
         val extension = PropertySpec
-            .builder(annotation.simpleName().decapitalize(), ClassName(PACKAGE, type))
+            .builder(annotation.simpleName().decapitalize(), ClassName(annotation.domainName.packageName, type))
             .addVisibility(annotation.visibility)
             .receiver(StoreScope::class.asTypeName().parameterizedBy(annotation.starProjected()))
             .delegate(

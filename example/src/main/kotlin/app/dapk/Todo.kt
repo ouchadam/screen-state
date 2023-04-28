@@ -1,11 +1,6 @@
 package app.dapk
 
 import app.dapk.TodoState.*
-import app.dapk.gen.add
-import app.dapk.gen.delete
-import app.dapk.gen.edit
-import app.dapk.gen.markCompleted
-import app.dapk.gen.update
 import app.dapk.annotation.State
 import app.dapk.annotation.StateActions
 import app.dapk.state.createReducer
