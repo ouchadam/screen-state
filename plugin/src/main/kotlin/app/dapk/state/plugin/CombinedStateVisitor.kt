@@ -9,6 +9,7 @@ import com.google.devtools.ksp.processing.KSPLogger
 import com.google.devtools.ksp.symbol.ClassKind
 import com.google.devtools.ksp.symbol.KSClassDeclaration
 import com.google.devtools.ksp.symbol.KSVisitorVoid
+import com.google.devtools.ksp.validate
 import com.squareup.kotlinpoet.ClassName
 import com.squareup.kotlinpoet.CodeBlock
 import com.squareup.kotlinpoet.FunSpec
@@ -36,6 +37,7 @@ internal class CombinedStateVisitor(
 
                 kspContext.createFile(packageName = classDeclaration.packageName.asString(), fileName = "${className}CombinedGenerated") {
                     val actionClasses = parameters.map { param ->
+                        logger.warn("!!!! : ${param.type}")
                         (param.type.declaration as KSClassDeclaration).parseStateAnnotation()
                     }
 
@@ -179,14 +181,12 @@ private fun generateCombinedObject(
                     actionClasses.map {
                         ParameterSpec.builder(
                             it.domainName.simpleName.decapitalize(),
-                            ReducerFactory::class.asTypeName()
-                                .parameterizedBy(it.resolveClass())
+                            ReducerFactory::class.asTypeName().parameterizedBy(it.resolveClass())
                         ).build()
                     }
                 )
                 .returns(
-                    ReducerFactory::class.asTypeName()
-                        .parameterizedBy(domainType)
+                    ReducerFactory::class.asTypeName().parameterizedBy(domainType)
                 )
                 .addCode(
                     """

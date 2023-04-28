@@ -41,10 +41,18 @@ data class AnnotationRep(
         "${it.simpleName}${domainName.simpleName}"
     } ?: domainName.simpleName)
 
-    fun resolveClass(): ClassName {
+    fun resolveClass(): TypeName {
         return when (isProxy) {
-            true -> ClassName(domainName.packageName, "${domainName.simpleName}Proxy")
-            false -> domainName
+            true -> ClassName(domainName.packageName, "${domainName.simpleName}Proxy").withType()
+            false -> domainName.withType()
+        }
+    }
+
+    private fun ClassName.withType(): TypeName {
+        return if (isTyped()) {
+            this.parameterizedBy(types.map { TypeVariableName(it.simpleName.asString()) })
+        } else {
+            this
         }
     }
 
@@ -57,13 +65,7 @@ data class AnnotationRep(
     }
 
     fun createTypeName(name: String): TypeName {
-        return ClassName(domainName.packageName, name).let {
-            if (isTyped()) {
-                it.parameterizedBy(types.map { TypeVariableName(it.simpleName.asString()) })
-            } else {
-                it
-            }
-        }
+        return ClassName(domainName.packageName, name).withType()
     }
 }
 

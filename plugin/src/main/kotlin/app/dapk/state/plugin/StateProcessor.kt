@@ -4,6 +4,7 @@ import app.dapk.annotation.CombinedState
 import app.dapk.annotation.State
 import app.dapk.annotation.StateActions
 import app.dapk.extension.Plugin
+import app.dapk.internal.Collectable
 import app.dapk.internal.StoreProperty
 import app.dapk.internal.Update
 import app.dapk.internal.UpdateExec
@@ -259,7 +260,7 @@ private fun generateUpdateFunctions(
     val internalUpdateApi = stateLike.createClass("${stateLike.simpleName().replaceFirstChar { it.titlecase() }}UpdaterImpl")
             .addSuperinterface(publicApiType)
             .addSuperinterface(
-                ClassName("app.dapk.internal", "Collectable").parameterizedBy(stateLike.domainClass)
+                Collectable::class.asTypeName().parameterizedBy(stateLike.domainClass)
             )
 
     val collectBuilder = FunSpec
