@@ -9,6 +9,7 @@ import app.dapk.state.Action
 import app.dapk.state.ReducerFactory
 import app.dapk.state.Store
 import app.dapk.state.createStore
+import app.dapk.thunk.thunk
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 
@@ -17,7 +18,7 @@ class StateViewModel<S, E>(
     eventSource: MutableSharedFlow<E>,
 ) : ViewModel(), State<S, E> {
 
-    private val store: Store<S> = createStore(reducerFactory, viewModelScope)
+    private val store: Store<S> = createStore(reducerFactory, thunk(viewModelScope))
     override val events: Flow<E> = eventSource
     override val current
         get() = _state!!

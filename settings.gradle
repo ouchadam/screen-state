@@ -21,8 +21,6 @@ include ':example'
 
 include ':common'
 
-include ':state'
-include ':state-page'
 include ':state-android'
 include ':state-test'
 

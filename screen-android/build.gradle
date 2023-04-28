@@ -12,5 +12,5 @@ android {
 dependencies {
     api project(":common")
     api project(":state-android")
-    api project(":state-page")
+    api project(":state-v2")
 }

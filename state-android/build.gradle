@@ -10,7 +10,8 @@ android {
 
 dependencies {
     implementation project(":common")
-    api project(":state")
+    api project(":state-v2")
+    api project(":thunk")
 
     implementation libs.compose.activity
 }

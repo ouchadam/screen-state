@@ -3,10 +3,8 @@ package test
 import app.dapk.state.Action
 import app.dapk.state.Reducer
 import app.dapk.state.ReducerFactory
-import app.dapk.state.ReducerScope
+import app.dapk.state.StoreScope
 import fake.FakeEventSource
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.amshove.kluent.internal.assertEquals
 import org.amshove.kluent.shouldBeEqualTo
@@ -47,8 +45,7 @@ class ReducerTestScope<S, E>(
     private var capturedResult: S? = null
 
     private val actionCaptures = mutableListOf<Action>()
-    private val reducerScope = object : ReducerScope<S> {
-        override val coroutineScope = CoroutineScope(UnconfinedTestDispatcher())
+    private val reducerScope = object : StoreScope<S> {
         override fun dispatch(action: Action) {
             actionCaptures.add(action)
 
@@ -59,11 +56,14 @@ class ReducerTestScope<S, E>(
 
         override fun getState() = manualState ?: reducerFactory.initialState()
     }
-    private val reducer: Reducer<S> = reducerFactory.create(reducerScope)
+    private val reducer: Reducer<S> = reducerFactory.create(reducerScope, emptyList())
 
-    override fun reduce(action: Action) = reducer.reduce(action).also {
-        capturedResult = if (invalidateCapturedState) manualState else it
+    override fun reduce(state: S, action: Action): S {
+        return reducer.reduce(state, action).also {
+            capturedResult = if (invalidateCapturedState) manualState else it
+        }
     }
+
 
     fun actionSideEffect(action: Action, handler: () -> S) {
         actionSideEffects[action] = handler
