@@ -10,22 +10,20 @@ import com.google.devtools.ksp.processing.Resolver
 import com.google.devtools.ksp.symbol.ClassKind
 import com.google.devtools.ksp.symbol.KSAnnotation
 import com.google.devtools.ksp.symbol.KSClassDeclaration
+import com.google.devtools.ksp.symbol.KSDeclaration
 import com.google.devtools.ksp.symbol.KSType
 import com.google.devtools.ksp.symbol.KSTypeParameter
-import com.google.devtools.ksp.symbol.Visibility
 import com.squareup.kotlinpoet.ClassName
 import com.squareup.kotlinpoet.FunSpec
 import com.squareup.kotlinpoet.KModifier
 import com.squareup.kotlinpoet.KModifier.*
 import com.squareup.kotlinpoet.ParameterSpec
-import com.squareup.kotlinpoet.ParameterizedTypeName
 import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
 import com.squareup.kotlinpoet.PropertySpec
 import com.squareup.kotlinpoet.TypeName
 import com.squareup.kotlinpoet.TypeSpec
 import com.squareup.kotlinpoet.TypeVariableName
 import com.squareup.kotlinpoet.ksp.toClassName
-import com.squareup.kotlinpoet.ksp.toKModifier
 import java.io.OutputStream
 
 fun KSClassDeclaration.parseStateAnnotation(): AnnotationRep {
@@ -187,5 +185,37 @@ fun TypeSpec.nameWithTypes(): String {
         this.name!!
     } else {
         "${this.name}${this.typeVariables.joinToString(prefix = "<", separator = ",", postfix = ">")}"
+    }
+}
+
+fun CombinedRep.createObject(name: String, inheritType: Boolean = false): TypeSpec.Builder {
+    return TypeSpec.objectBuilder(name)
+        .apply {
+            annotationRep.withVisibility { addModifiers(it) }
+            if (inheritType) annotationRep.withTypes { addTypeVariables(it) }
+        }
+}
+
+fun CombinedRep.createFunction(name: String, inheritType: Boolean = false): FunSpec.Builder {
+    return FunSpec.builder(name)
+        .apply {
+            annotationRep.withVisibility { addModifiers(it) }
+            if (inheritType) annotationRep.withTypes { addTypeVariables(it) }
+        }
+}
+
+fun KSType.toQualifiedName(): String {
+    return when(val actual = this.declaration) {
+        is KSTypeParameter -> actual.simpleName.getShortName()
+        else -> actual.qualifiedNameWithTypes()
+    }
+}
+
+private fun KSDeclaration.qualifiedNameWithTypes(): String {
+    val name = this.qualifiedName!!.asString()
+    return if (typeParameters.isEmpty()) {
+        name
+    } else {
+        "${name}${this.typeParameters.joinToString(prefix = "<", separator = ",", postfix = ">") { it.simpleName.asString()} }"
     }
 }

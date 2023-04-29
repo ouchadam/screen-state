@@ -54,13 +54,15 @@ data class AnnotationRep(
 
     fun shortName() = domainName.simpleName
 
-    fun resolveClass() = when (isProxy) {
-        true -> ClassName(packageName, "${domainName.simpleName}Proxy").withType()
-        false -> domainName.withType()
+    fun resolveClass(starProjected: Boolean = false) = when (isProxy) {
+        true -> ClassName(packageName, "${domainName.simpleName}Proxy").withType(starProjected)
+        false -> domainName.withType(starProjected)
     }
 
-    private fun ClassName.withType() = when (isTyped()) {
-        true -> this.parameterizedBy(types.map { TypeVariableName(it.simpleName.asString()) })
+    private fun ClassName.withType(starProjected: Boolean) = when (isTyped()) {
+        true -> this.parameterizedBy(types.map {
+            if (starProjected) STAR else TypeVariableName(it.simpleName.asString())
+        })
         false -> this
     }
 
@@ -72,16 +74,13 @@ data class AnnotationRep(
         }
     }
 
-    fun createTypeName(name: String, inheritType: Boolean = true): TypeName = when (inheritType) {
-        true -> ClassName(packageName, name).withType()
+    fun createTypeName(name: String, inheritType: Boolean = true, starProjected: Boolean = false): TypeName = when (inheritType) {
+        true -> ClassName(packageName, name).withType(starProjected)
         false -> ClassName(packageName, name)
     }
 
     fun resolveType(type: KSType): TypeName {
-        return when (type.declaration is KSTypeParameter) {
-            true -> type.toTypeName(types.toTypeParameterResolver())
-            false -> type.toTypeName()
-        }
+        return type.toTypeName(types.toTypeParameterResolver())
     }
 
     fun asParameterOf(kClass: KClass<*>, starProjected: Boolean = false) = when (starProjected) {

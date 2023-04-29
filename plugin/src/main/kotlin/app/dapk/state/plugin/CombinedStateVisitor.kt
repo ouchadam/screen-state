@@ -39,26 +39,13 @@ internal class CombinedStateVisitor(
                 val combinedAnnotation = classDeclaration.parseCombinedAnnotation()
 
                 kspContext.createFile(packageName = combinedAnnotation.annotationRep.packageName, fileName = "${className}CombinedGenerated") {
-                    val actionClasses = parameters.map { param ->
+                    val actionClasses = parameters.mapNotNull { param ->
                         logger.warn("!!!! : ${param.type}")
-                        when(val declaration = param.type.declaration) {
+                        when (val declaration = param.type.declaration) {
                             is KSClassDeclaration -> declaration.parseStateAnnotation()
-                            is KSTypeParameter -> {
-                                TODO()
-//                                AnnotationRep(
-//                                    TypeVariableName(declaration.name.asString()),
-//                                    null,
-//                                    listOf(declaration),
-//                                    classDeclaration.getVisibility(),
-//                                    classDeclaration.parentDeclaration as? KSClassDeclaration,
-//                                    emptyList(),
-//                                    false,
-//                                    false
-//                                )
-                            }
                             else -> {
-                                logger.error("Unknown type: $declaration")
-                                error("")
+                                logger.warn("Unknown type: $declaration")
+                                null
                             }
                         }
                     }
@@ -66,7 +53,7 @@ internal class CombinedStateVisitor(
                     val domainType = classDeclaration.toClassName()
                     val objectNamespace = "Combine${domainType.simpleName}"
                     listOf(
-                        generateCombinedObject(objectNamespace, domainType, combinedAnnotation, actionClasses),
+                        generateCombinedObject(objectNamespace, combinedAnnotation, actionClasses, parameters),
                         generateActionExtensions(
                             domainType,
                             ClassName(combinedAnnotation.annotationRep.packageName, objectNamespace),
@@ -98,24 +85,37 @@ internal class CombinedStateVisitor(
 
                     val proxy = ClassName(classDeclaration.packageName.asString(), "${className}Proxy")
                     val toList = sealedSubclasses.toList()
-                    val actionClasses = toList.map { it.parseStateAnnotation() }
+                    val actionClasses = toList.mapNotNull { runCatching { it.parseStateAnnotation() }.getOrNull() }
 
                     val parameters = toList.map {
                         Prop(it.simpleName, it.asStarProjectedType())
                     }
+
+
+                    val proxyCombined = combinedAnnotation.let {
+                        it.copy(
+                            it.annotationRep.copy(
+                                domainClass = proxy,
+                                domainName = proxy,
+                                actions = it.annotationRep.actions?.plus(it.commonActions ?: emptyList())
+                            )
+                        )
+                    }
+
 
                     kspContext.createFile(
                         packageName = classDeclaration.packageName.asString(),
                         fileName = "${className}CombinedGenerated"
                     ) {
                         val objectNamespace = "Combine${className}"
+
                         listOf(
                             generateProxy(proxy, parameters),
-                            generateCombinedObject(objectNamespace, proxy, combinedAnnotation, actionClasses),
+                            generateCombinedObject(objectNamespace, proxyCombined, actionClasses, parameters),
                             generateActionExtensions(
                                 proxy,
                                 ClassName(classDeclaration.packageName.asString(), objectNamespace),
-                                combinedAnnotation,
+                                proxyCombined,
                                 actionClasses,
                             )
                         )
@@ -124,13 +124,7 @@ internal class CombinedStateVisitor(
                     processStateLike(
                         kspContext,
                         parameters,
-                        combinedAnnotation.let {
-                            it.annotationRep.copy(
-                                domainClass = proxy,
-                                domainName = proxy,
-                                actions = it.annotationRep.actions?.plus(it.commonActions ?: emptyList())
-                            )
-                        },
+                        proxyCombined.annotationRep,
                         logger,
                         plugins
                     )
@@ -164,7 +158,7 @@ private fun generateActionExtensions(
         val prop = PropertySpec
             .builder("actions", actionsType)
             .addVisibility(combinedRep.annotationRep)
-            .receiver(StoreScope::class.asTypeName().parameterizedBy(stateType))
+            .receiver(combinedRep.annotationRep.asParameterOf(StoreScope::class, starProjected = true))
             .delegate(
                 CodeBlock.Builder()
                     .beginControlFlow(StoreProperty::class.qualifiedName.toString())
@@ -175,7 +169,7 @@ private fun generateActionExtensions(
                             parameters.joinToString(",\n") {
                                 "(it as ${
                                     StoreScope::class.asTypeName()
-                                        .parameterizedBy(it.resolveClass())
+                                        .parameterizedBy(it.resolveClass(starProjected = true))
                                 }).${it.resolveSimpleName().decapitalize()}"
                             }
                         }
@@ -191,45 +185,44 @@ private fun generateActionExtensions(
 
 private fun generateCombinedObject(
     name: String,
-    domainType: ClassName,
     combinedRep: CombinedRep,
     actionClasses: List<AnnotationRep>,
+    parameters: List<Prop>,
 ): Writeable {
-    val helperObject = TypeSpec.objectBuilder(name)
-        .addModifiers(combinedRep.annotationRep.visibilityModifier())
+    val helperObject = combinedRep.createObject(name)
         .addFunction(
-            FunSpec.builder("fromReducers")
+            combinedRep.createFunction("fromReducers", inheritType = true)
                 .addParameters(
-                    actionClasses.map {
+                    parameters.map {
                         ParameterSpec.builder(
-                            it.shortName().decapitalize(),
-                            ReducerFactory::class.asTypeName().parameterizedBy(it.resolveClass())
+                            it.name.getShortName().decapitalize(),
+                            ReducerFactory::class.asTypeName().parameterizedBy(combinedRep.annotationRep.resolveType(it.type))
                         ).build()
                     }
                 )
                 .returns(
-                    ReducerFactory::class.asTypeName().parameterizedBy(domainType)
+                    combinedRep.annotationRep.asParameterOf(ReducerFactory::class)
                 )
                 .addCode(
                     """
                         return app.dapk.state.combineReducers(factory(), ${
-                        actionClasses.joinToString(",") { it.shortName().decapitalize() }
+                        parameters.joinToString(",") { it.name.getShortName().decapitalize() }
                     })
                     """.trimIndent()
                 )
                 .build()
         )
         .addFunction(
-            FunSpec.builder("factory")
+            combinedRep.createFunction("factory", inheritType = true)
                 .addModifiers(KModifier.PRIVATE)
-                .returns(ObjectFactory::class.asTypeName().parameterizedBy(domainType))
+                .returns(combinedRep.annotationRep.asParameterOf(ObjectFactory::class))
                 .addStatement("return " +
                     TypeSpec.anonymousClassBuilder()
                         .addSuperinterface(
-                            ObjectFactory::class.asTypeName().parameterizedBy(domainType)
+                            combinedRep.annotationRep.asParameterOf(ObjectFactory::class)
                         )
                         .addFunction(
-                            FunSpec.builder("construct")
+                            combinedRep.createFunction("construct")
                                 .addModifiers(KModifier.OVERRIDE)
                                 .addParameter(
                                     "content",
@@ -238,15 +231,15 @@ private fun generateCombinedObject(
                                 )
                                 .addCode(
                                     """
-                                    |return ${domainType.canonicalName}(
+                                    |return ${combinedRep.annotationRep.qualifiedName}(
                                     |  ${
-                                        actionClasses.mapIndexed { index, param -> "content[$index] as ${param.qualifiedName}" }
+                                        parameters.mapIndexed { index, param -> "content[$index] as ${param.type.toQualifiedName()}" }
                                             .joinToString(",")
                                     }
                                     |)
                                     """.trimMargin()
                                 )
-                                .returns(domainType)
+                                .returns(combinedRep.annotationRep.domainClass)
                                 .build()
 
                         )
@@ -255,13 +248,13 @@ private fun generateCombinedObject(
                                 .addModifiers(KModifier.OVERRIDE)
                                 .addTypeVariable(TypeVariableName("T"))
                                 .returns(TypeVariableName("T"))
-                                .receiver(domainType)
+                                .receiver(combinedRep.annotationRep.domainClass)
                                 .addParameter("index", Int::class)
                                 .addCode(
                                     """
                                         |return when(index) {
                                         ${
-                                        List(actionClasses.size) { index ->
+                                        List(parameters.size) { index ->
                                             "$index -> component${index + 1}()"
                                         }.joinToString("\n")
                                     }

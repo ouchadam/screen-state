@@ -8,7 +8,7 @@ interface ObjectFactory<R: Any> {
 @Suppress("UNCHECKED_CAST")
 fun <R: Any> combineReducers(
     factory: ObjectFactory<R>,
-    vararg factories: ReducerFactory<out Any>,
+    vararg factories: ReducerFactory<*>,
 ) = object : ReducerFactory<R> {
     override fun create(scope: StoreScope<R>, extensions: List<StoreExtension>): Reducer<R> {
         val fullState = scope.getState()
@@ -24,7 +24,7 @@ fun <R: Any> combineReducers(
         return Reducer { state, action -> factory.construct(reducers.map { it.reduce(state, action) }) }
     }
 
-    override fun initialState(): R = factory.construct(factories.map { it.initialState() })
+    override fun initialState(): R = factory.construct(factories.map { it.initialState() as Any })
 }
 
 private fun <S, R> StoreScope<S>.downScope(reader: () -> R) = object : StoreScope<R> {
@@ -38,8 +38,11 @@ fun <S: Any> ReducerFactory<S>.outer(builder: ReducerBuilder<S>.() -> Unit): Red
         override fun create(scope: StoreScope<S>, extensions: List<StoreExtension>): Reducer<S> {
             val parentScope = outer.create(scope, extensions)
             val childScope = this@outer.create(scope, extensions)
-            return Reducer { state, action -> parentScope.reduce(childScope.reduce(state, action), action) }
+            return Reducer { state, action ->
+                parentScope.reduce(childScope.reduce(state, action), action)
+            }
         }
         override fun initialState() = outer.initialState()
     }
 }
+
