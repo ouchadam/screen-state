@@ -23,10 +23,7 @@ class ThunkPluginExtension : Plugin {
             val receiverImpl = representation.createTypeName("${representation.simpleName()}UpdaterImpl")
             Writeable {
                 it += representation.createFunction("thunkUpdate")
-                    .receiver(
-                        ThunkExecutionContext::class.asTypeName()
-                            .parameterizedBy(representation.domainClass)
-                    )
+                    .receiver(representation.asParameterOf(ThunkExecutionContext::class))
                     .addParameter(
                         "block",
                         LambdaTypeName.get(receiver, emptyList(), Unit::class.asTypeName())

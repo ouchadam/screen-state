@@ -11,12 +11,14 @@ import com.google.devtools.ksp.symbol.ClassKind
 import com.google.devtools.ksp.symbol.KSAnnotation
 import com.google.devtools.ksp.symbol.KSClassDeclaration
 import com.google.devtools.ksp.symbol.KSType
+import com.google.devtools.ksp.symbol.KSTypeParameter
 import com.google.devtools.ksp.symbol.Visibility
 import com.squareup.kotlinpoet.ClassName
 import com.squareup.kotlinpoet.FunSpec
 import com.squareup.kotlinpoet.KModifier
 import com.squareup.kotlinpoet.KModifier.*
 import com.squareup.kotlinpoet.ParameterSpec
+import com.squareup.kotlinpoet.ParameterizedTypeName
 import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
 import com.squareup.kotlinpoet.PropertySpec
 import com.squareup.kotlinpoet.TypeName
@@ -47,7 +49,6 @@ fun KSClassDeclaration.parseStateAnnotation(): AnnotationRep {
         isProxy = this.getSealedSubclasses().iterator().hasNext()
     )
 }
-
 
 private fun KSClassDeclaration.typedName(): TypeName {
     val domainType = this.toClassName()
@@ -152,22 +153,15 @@ fun KspContext.createFile(fileName: String, packageName: String, block: () -> Li
     file.use { block().forEach { it.writeTo(file) } }
 }
 
-fun PropertySpec.Builder.addVisibility(visibility: Visibility) = this.apply {
-    visibility.toKModifier().takeIf { it != PUBLIC }?.let {
-        addModifiers(it)
-    }
+fun PropertySpec.Builder.addVisibility(annotationRep: AnnotationRep) = this.apply {
+    annotationRep.withVisibility { addModifiers(it) }
 }
-
 
 fun AnnotationRep.createInterface(name: String): TypeSpec.Builder {
     return TypeSpec.interfaceBuilder(name)
         .apply {
-            visibility.toKModifier().takeIf { it != PUBLIC }?.let {
-                addModifiers(it)
-            }
-            if (isTyped()) {
-                addTypeVariables(types.map { TypeVariableName(it.simpleName.asString()) })
-            }
+            withVisibility { addModifiers(it) }
+            withTypes { addTypeVariables(it) }
         }
         .addModifiers(this.visibilityModifier())
 }
@@ -175,24 +169,16 @@ fun AnnotationRep.createInterface(name: String): TypeSpec.Builder {
 fun AnnotationRep.createClass(name: String): TypeSpec.Builder {
     return TypeSpec.classBuilder(name)
         .apply {
-            visibility.toKModifier().takeIf { it != PUBLIC }?.let {
-                addModifiers(it)
-            }
-            if (isTyped()) {
-                addTypeVariables(types.map { TypeVariableName(it.simpleName.asString()) })
-            }
+            withVisibility { addModifiers(it) }
+            withTypes { addTypeVariables(it) }
         }
 }
 
 fun AnnotationRep.createFunction(name: String): FunSpec.Builder {
     return FunSpec.builder(name)
         .apply {
-            visibility.toKModifier().takeIf { it != PUBLIC }?.let {
-                addModifiers(it)
-            }
-            if (isTyped()) {
-                addTypeVariables(types.map { TypeVariableName(it.simpleName.asString()) })
-            }
+            withVisibility { addModifiers(it) }
+            withTypes { addTypeVariables(it) }
         }
 }
 

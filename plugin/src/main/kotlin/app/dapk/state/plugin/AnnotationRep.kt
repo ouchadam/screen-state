@@ -1,39 +1,50 @@
 package app.dapk.state.plugin
 
 import com.google.devtools.ksp.symbol.KSClassDeclaration
+import com.google.devtools.ksp.symbol.KSType
 import com.google.devtools.ksp.symbol.KSTypeParameter
 import com.google.devtools.ksp.symbol.KSValueParameter
 import com.google.devtools.ksp.symbol.Visibility
 import com.squareup.kotlinpoet.ClassName
+import com.squareup.kotlinpoet.KModifier
+import com.squareup.kotlinpoet.KModifier.*
 import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
 import com.squareup.kotlinpoet.STAR
 import com.squareup.kotlinpoet.TypeName
 import com.squareup.kotlinpoet.TypeVariableName
+import com.squareup.kotlinpoet.asTypeName
 import com.squareup.kotlinpoet.ksp.toClassName
 import com.squareup.kotlinpoet.ksp.toKModifier
+import com.squareup.kotlinpoet.ksp.toTypeName
+import com.squareup.kotlinpoet.ksp.toTypeParameterResolver
+import java.lang.annotation.Inherited
+import kotlin.reflect.KClass
 
 data class AnnotationRep(
     val domainClass: TypeName,
-    val domainName: ClassName,
+    private val domainName: ClassName,
     val types: List<KSTypeParameter>,
-    val visibility: Visibility,
+    private val visibility: Visibility,
     val parentDeclaration: KSClassDeclaration?,
     val actions: List<ActionRep>?,
     val isObject: Boolean,
     val isProxy: Boolean,
 ) {
 
+    val packageName: String = domainName.packageName
+    val qualifiedName: String = domainName.canonicalName
+
     private val parentClass = parentDeclaration?.toClassName()
 
-    fun isTyped() = types.isNotEmpty()
-
-    fun starProjected(): TypeName {
-        return if (isTyped()) {
-            domainName.parameterizedBy(types.map { STAR })
-        } else {
-            domainName
-        }
+    fun withVisibility(block: (KModifier) -> Unit) {
+        visibility.toKModifier().takeIf { it != PUBLIC }?.let { block(it) }
     }
+
+    fun withTypes(block: (List<TypeVariableName>) -> Unit) {
+        block(types.map { TypeVariableName(it.simpleName.asString()) })
+    }
+
+    private fun isTyped() = types.isNotEmpty()
 
     fun visibilityModifier() = visibility.toKModifier()!!
 
@@ -41,19 +52,16 @@ data class AnnotationRep(
         "${it.simpleName}${domainName.simpleName}"
     } ?: domainName.simpleName)
 
-    fun resolveClass(): TypeName {
-        return when (isProxy) {
-            true -> ClassName(domainName.packageName, "${domainName.simpleName}Proxy").withType()
-            false -> domainName.withType()
-        }
+    fun shortName() = domainName.simpleName
+
+    fun resolveClass() = when (isProxy) {
+        true -> ClassName(packageName, "${domainName.simpleName}Proxy").withType()
+        false -> domainName.withType()
     }
 
-    private fun ClassName.withType(): TypeName {
-        return if (isTyped()) {
-            this.parameterizedBy(types.map { TypeVariableName(it.simpleName.asString()) })
-        } else {
-            this
-        }
+    private fun ClassName.withType() = when (isTyped()) {
+        true -> this.parameterizedBy(types.map { TypeVariableName(it.simpleName.asString()) })
+        false -> this
     }
 
     fun resolveSimpleName(): String {
@@ -64,8 +72,26 @@ data class AnnotationRep(
         }
     }
 
-    fun createTypeName(name: String): TypeName {
-        return ClassName(domainName.packageName, name).withType()
+    fun createTypeName(name: String, inheritType: Boolean = true): TypeName = when (inheritType) {
+        true -> ClassName(packageName, name).withType()
+        false -> ClassName(packageName, name)
+    }
+
+    fun resolveType(type: KSType): TypeName {
+        return when (type.declaration is KSTypeParameter) {
+            true -> type.toTypeName(types.toTypeParameterResolver())
+            false -> type.toTypeName()
+        }
+    }
+
+    fun asParameterOf(kClass: KClass<*>, starProjected: Boolean = false) = when (starProjected) {
+        true -> kClass.asTypeName().parameterizedBy(starProjected())
+        false -> kClass.asTypeName().parameterizedBy(domainClass)
+    }
+
+    private fun starProjected() = when (isTyped()) {
+        true -> domainName.parameterizedBy(types.map { STAR })
+        false -> domainName
     }
 }
 

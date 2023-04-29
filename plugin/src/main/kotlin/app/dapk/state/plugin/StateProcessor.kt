@@ -20,7 +20,6 @@ import com.google.devtools.ksp.symbol.KSAnnotated
 import com.google.devtools.ksp.symbol.KSClassDeclaration
 import com.google.devtools.ksp.symbol.KSName
 import com.google.devtools.ksp.symbol.KSType
-import com.google.devtools.ksp.symbol.KSTypeParameter
 import com.google.devtools.ksp.symbol.KSVisitor
 import com.google.devtools.ksp.symbol.KSVisitorVoid
 import com.google.devtools.ksp.validate
@@ -30,12 +29,10 @@ import com.squareup.kotlinpoet.FunSpec
 import com.squareup.kotlinpoet.KModifier.*
 import com.squareup.kotlinpoet.LambdaTypeName
 import com.squareup.kotlinpoet.ParameterSpec
-import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
 import com.squareup.kotlinpoet.PropertySpec
 import com.squareup.kotlinpoet.TypeSpec
 import com.squareup.kotlinpoet.asTypeName
 import com.squareup.kotlinpoet.ksp.toTypeName
-import com.squareup.kotlinpoet.ksp.toTypeParameterResolver
 import java.util.ServiceLoader
 
 class StateProcessor(
@@ -151,7 +148,7 @@ fun processStateLike(
     logger: KSPLogger,
     plugins: List<Plugin>
 ) {
-    kspContext.createFile(packageName = stateLike.domainName.packageName, fileName = "${stateLike.simpleName()}Generated") {
+    kspContext.createFile(packageName = stateLike.packageName, fileName = "${stateLike.simpleName()}Generated") {
         buildList {
             if (!stateLike.isObject) {
                 addAll(generateUpdateFunctions(stateLike, parameters, logger))
@@ -173,14 +170,14 @@ private fun generateExtensions(
                 ParameterSpec("", annotation.domainClass),
                 ParameterSpec("", actionRep.resolveGeneratedAction(it))
             )
+
             FunSpec.builder(it.name)
                 .addModifiers(annotation.visibilityModifier())
-                .receiver(ReducerBuilder::class.asTypeName().parameterizedBy(annotation.domainClass))
+                .receiver(annotation.asParameterOf(ReducerBuilder::class))
                 .addParameter(
                     "block",
                     LambdaTypeName.get(
-                        receiver = ExecutionRegistrar::class.asTypeName()
-                            .parameterizedBy(annotation.domainClass),
+                        receiver = annotation.asParameterOf(ExecutionRegistrar::class),
                         parameters = listOf,
                         returnType = Unit::class.asTypeName()
                     ),
@@ -198,7 +195,7 @@ private fun generateExtensions(
             .build()
 
         val allActionsImpl = TypeSpec.anonymousClassBuilder()
-            .addSuperinterface(ClassName(annotation.domainName.packageName, type))
+            .addSuperinterface(ClassName(annotation.packageName, type))
 
         it.forEach { actionRep ->
             val implementationFunctions = actionRep.functions.map {
@@ -228,9 +225,9 @@ private fun generateExtensions(
         }
 
         val extension = PropertySpec
-            .builder(annotation.simpleName().decapitalize(), ClassName(annotation.domainName.packageName, type))
-            .addVisibility(annotation.visibility)
-            .receiver(StoreScope::class.asTypeName().parameterizedBy(annotation.starProjected()))
+            .builder(annotation.simpleName().decapitalize(), annotation.createTypeName(type, inheritType = false))
+            .addVisibility(annotation)
+            .receiver(annotation.asParameterOf(StoreScope::class, starProjected = true))
             .delegate(
                 CodeBlock.Builder()
                     .beginControlFlow(StoreProperty::class.qualifiedName!!)
@@ -259,13 +256,11 @@ private fun generateUpdateFunctions(
     val publicApiType = stateLike.createTypeName(updaterName)
     val internalUpdateApi = stateLike.createClass("${stateLike.simpleName().replaceFirstChar { it.titlecase() }}UpdaterImpl")
             .addSuperinterface(publicApiType)
-            .addSuperinterface(
-                Collectable::class.asTypeName().parameterizedBy(stateLike.domainClass)
-            )
+            .addSuperinterface(stateLike.asParameterOf(Collectable::class))
 
     val collectBuilder = FunSpec
         .builder("collect")
-        .returns(Update::class.asTypeName().parameterizedBy(stateLike.domainClass))
+        .returns(stateLike.asParameterOf(Update::class))
         .addModifiers(OVERRIDE)
 
     val collectCopyBlock = CodeBlock.builder()
@@ -276,11 +271,7 @@ private fun generateUpdateFunctions(
 
     prop.forEach {
         val propertyName = it.name.getShortName().decapitalize()
-        val type = when (it.type.declaration is KSTypeParameter) {
-            true -> it.type.toTypeName(stateLike.types.toTypeParameterResolver())
-            false -> it.type.toTypeName()
-        }
-
+        val type = stateLike.resolveType(it.type)
         val funBuilder = FunSpec
             .builder(propertyName)
             .addParameter(
@@ -337,7 +328,7 @@ private fun generateUpdateFunctions(
     val internalBuild = internalUpdateApi.build()
 
     val updateFun = stateLike.createFunction("update")
-        .returns(Update::class.asTypeName().parameterizedBy(stateLike.domainClass))
+        .returns(stateLike.asParameterOf(Update::class))
         .addParameter(
             "block",
             LambdaTypeName.get(publicApiType, emptyList(), Unit::class.asTypeName())
@@ -354,7 +345,7 @@ private fun generateUpdateFunctions(
     val receiver = stateLike.createTypeName("${stateLike.simpleName()}Updater")
     val executionExtensions = listOf(
         stateLike.createFunction("update")
-            .receiver(ExecutionRegistrar::class.asTypeName().parameterizedBy(stateLike.domainClass))
+            .receiver(stateLike.asParameterOf(ExecutionRegistrar::class))
             .addParameter(
                 "block",
                 LambdaTypeName.get(receiver, emptyList(), Unit::class.asTypeName())

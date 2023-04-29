@@ -5,9 +5,11 @@ import app.dapk.internal.StoreProperty
 import app.dapk.state.ObjectFactory
 import app.dapk.state.ReducerFactory
 import app.dapk.state.StoreScope
+import com.google.devtools.ksp.getVisibility
 import com.google.devtools.ksp.processing.KSPLogger
 import com.google.devtools.ksp.symbol.ClassKind
 import com.google.devtools.ksp.symbol.KSClassDeclaration
+import com.google.devtools.ksp.symbol.KSTypeParameter
 import com.google.devtools.ksp.symbol.KSVisitorVoid
 import com.google.devtools.ksp.validate
 import com.squareup.kotlinpoet.ClassName
@@ -21,6 +23,7 @@ import com.squareup.kotlinpoet.TypeSpec
 import com.squareup.kotlinpoet.TypeVariableName
 import com.squareup.kotlinpoet.asTypeName
 import com.squareup.kotlinpoet.ksp.toClassName
+import com.squareup.kotlinpoet.ksp.toTypeName
 
 internal class CombinedStateVisitor(
     private val kspContext: KspContext,
@@ -35,10 +38,29 @@ internal class CombinedStateVisitor(
                 val className = classDeclaration.simpleName.asString()
                 val combinedAnnotation = classDeclaration.parseCombinedAnnotation()
 
-                kspContext.createFile(packageName = classDeclaration.packageName.asString(), fileName = "${className}CombinedGenerated") {
+                kspContext.createFile(packageName = combinedAnnotation.annotationRep.packageName, fileName = "${className}CombinedGenerated") {
                     val actionClasses = parameters.map { param ->
                         logger.warn("!!!! : ${param.type}")
-                        (param.type.declaration as KSClassDeclaration).parseStateAnnotation()
+                        when(val declaration = param.type.declaration) {
+                            is KSClassDeclaration -> declaration.parseStateAnnotation()
+                            is KSTypeParameter -> {
+                                TODO()
+//                                AnnotationRep(
+//                                    TypeVariableName(declaration.name.asString()),
+//                                    null,
+//                                    listOf(declaration),
+//                                    classDeclaration.getVisibility(),
+//                                    classDeclaration.parentDeclaration as? KSClassDeclaration,
+//                                    emptyList(),
+//                                    false,
+//                                    false
+//                                )
+                            }
+                            else -> {
+                                logger.error("Unknown type: $declaration")
+                                error("")
+                            }
+                        }
                     }
 
                     val domainType = classDeclaration.toClassName()
@@ -47,7 +69,7 @@ internal class CombinedStateVisitor(
                         generateCombinedObject(objectNamespace, domainType, combinedAnnotation, actionClasses),
                         generateActionExtensions(
                             domainType,
-                            ClassName(classDeclaration.packageName.asString(), objectNamespace),
+                            ClassName(combinedAnnotation.annotationRep.packageName, objectNamespace),
                             combinedAnnotation,
                             actionClasses,
                         )
@@ -141,7 +163,7 @@ private fun generateActionExtensions(
         val actionsType = objectNamespace.nestedClass("Actions")
         val prop = PropertySpec
             .builder("actions", actionsType)
-            .addVisibility(combinedRep.annotationRep.visibility)
+            .addVisibility(combinedRep.annotationRep)
             .receiver(StoreScope::class.asTypeName().parameterizedBy(stateType))
             .delegate(
                 CodeBlock.Builder()
@@ -180,7 +202,7 @@ private fun generateCombinedObject(
                 .addParameters(
                     actionClasses.map {
                         ParameterSpec.builder(
-                            it.domainName.simpleName.decapitalize(),
+                            it.shortName().decapitalize(),
                             ReducerFactory::class.asTypeName().parameterizedBy(it.resolveClass())
                         ).build()
                     }
@@ -191,7 +213,7 @@ private fun generateCombinedObject(
                 .addCode(
                     """
                         return app.dapk.state.combineReducers(factory(), ${
-                        actionClasses.joinToString(",") { it.domainName.simpleName.decapitalize() }
+                        actionClasses.joinToString(",") { it.shortName().decapitalize() }
                     })
                     """.trimIndent()
                 )
@@ -218,7 +240,7 @@ private fun generateCombinedObject(
                                     """
                                     |return ${domainType.canonicalName}(
                                     |  ${
-                                        actionClasses.mapIndexed { index, param -> "content[$index] as ${param.domainName.canonicalName}" }
+                                        actionClasses.mapIndexed { index, param -> "content[$index] as ${param.qualifiedName}" }
                                             .joinToString(",")
                                     }
                                     |)
@@ -258,9 +280,9 @@ private fun generateCombinedObject(
             val actions = actionClasses.mapNotNull { domain ->
                 domain.actions?.let {
                     ClassProperty(
-                        domain.domainName.simpleName,
+                        domain.shortName(),
                         ClassName(
-                            domain.domainName.packageName, "${domain.resolveSimpleName()}AllActions"
+                            domain.packageName, "${domain.resolveSimpleName()}AllActions"
                         )
                     )
                 }
