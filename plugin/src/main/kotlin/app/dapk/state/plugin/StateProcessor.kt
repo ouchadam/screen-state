@@ -171,8 +171,7 @@ private fun generateExtensions(
                 ParameterSpec("", actionRep.resolveGeneratedAction(it))
             )
 
-            FunSpec.builder(it.name)
-                .addModifiers(annotation.visibilityModifier())
+            annotation.createFunction(it.name)
                 .receiver(annotation.asParameterOf(ReducerBuilder::class))
                 .addParameter(
                     "block",

@@ -65,5 +65,5 @@ interface StoreExtension {
 private fun <S> createScope(store: Store<S>, subDispatch: (Action) -> Unit) =
     object : StoreScope<S> {
         override fun dispatch(action: Action) = subDispatch.invoke(action)
-        override fun getState(): S = store.getState()
+        override fun getState() = store.getState()
     }

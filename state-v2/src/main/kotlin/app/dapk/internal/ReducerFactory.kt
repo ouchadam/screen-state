@@ -45,6 +45,7 @@ private class ReducerConfiguration<S>(
     val accept: (Action) -> Boolean
 )
 
+
 private fun <S> buildConfig(
     builder: ReducerBuilder<S>.() -> Unit,
     scope: StoreScope<S>,

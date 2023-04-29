@@ -14,11 +14,10 @@ fun <R: Any> combineReducers(
     private var interceptor: (R, Any, Action) -> Boolean = { _, _, _ -> false }
 
     override fun create(scope: StoreScope<R>, extensions: List<StoreExtension>): Reducer<R> {
-        val fullState = scope.getState()
         val reducers = with(factory) {
             factories.mapIndexed { index, reducerFactory ->
                 val reducer = (reducerFactory as ReducerFactory<Any>).create(
-                    scope.downScope { fullState.destruct(index) },
+                    scope.downScope { scope.getState().destruct(index) },
                     extensions
                 )
                 Reducer<Any> { state, action ->
@@ -61,3 +60,18 @@ fun <S: Any> ReducerFactory<S>.outer(builder: ReducerBuilder<S>.() -> Unit): Red
     }
 }
 
+fun <S: Any> ReducerFactory<S>.share(): Pair<ReducerFactory<S>, () -> S> {
+    var _scope: StoreScope<S>? = null
+    val lateScope: () -> S = { _scope!!.getState() }
+
+    val sharedReducer = object : ReducerFactory<S> {
+        override fun create(scope: StoreScope<S>, extensions: List<StoreExtension>): Reducer<S> {
+            _scope = object : StoreScope<S> by scope {}
+            return this@share.create(_scope!!, extensions)
+        }
+
+        override fun initialState() = this@share.initialState()
+    }
+
+    return sharedReducer to lateScope
+}
