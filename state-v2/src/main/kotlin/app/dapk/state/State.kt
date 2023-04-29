@@ -19,6 +19,10 @@ interface ReducerFactory<S> {
     fun initialState(): S
 }
 
+interface CombinedReducerFactory<S>: ReducerFactory<S> {
+    fun intercept(interceptor: (state: S, childState: Any, Action) -> Boolean): ReducerFactory<S>
+}
+
 interface ReducerBuilder<S> : StoreScope<S>, ReducerRegistrar<S>, ReducerFuncs
 
 interface ReducerFuncs {

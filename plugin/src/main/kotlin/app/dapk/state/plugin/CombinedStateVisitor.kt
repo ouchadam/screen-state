@@ -2,6 +2,7 @@ package app.dapk.state.plugin
 
 import app.dapk.extension.Plugin
 import app.dapk.internal.StoreProperty
+import app.dapk.state.CombinedReducerFactory
 import app.dapk.state.ObjectFactory
 import app.dapk.state.ReducerFactory
 import app.dapk.state.StoreScope
@@ -201,7 +202,7 @@ private fun generateCombinedObject(
                     }
                 )
                 .returns(
-                    combinedRep.annotationRep.asParameterOf(ReducerFactory::class)
+                    combinedRep.annotationRep.asParameterOf(CombinedReducerFactory::class)
                 )
                 .addCode(
                     """

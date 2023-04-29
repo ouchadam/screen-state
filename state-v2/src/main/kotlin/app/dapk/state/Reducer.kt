@@ -9,7 +9,10 @@ interface ObjectFactory<R: Any> {
 fun <R: Any> combineReducers(
     factory: ObjectFactory<R>,
     vararg factories: ReducerFactory<*>,
-) = object : ReducerFactory<R> {
+) = object : CombinedReducerFactory<R> {
+
+    private var interceptor: (R, Any, Action) -> Boolean = { _, _, _ -> false }
+
     override fun create(scope: StoreScope<R>, extensions: List<StoreExtension>): Reducer<R> {
         val fullState = scope.getState()
         val reducers = with(factory) {
@@ -18,10 +21,22 @@ fun <R: Any> combineReducers(
                     scope.downScope { fullState.destruct(index) },
                     extensions
                 )
-                Reducer<Any> { state, action -> reducer.reduce((state as R).destruct(index), action) }
+                Reducer<Any> { state, action ->
+                    val subState = (state as R).destruct<Any>(index)
+                    if (interceptor.invoke(state, subState, action)) {
+                        subState
+                    } else {
+                        reducer.reduce(subState, action)
+                    }
+                }
             }
         }
         return Reducer { state, action -> factory.construct(reducers.map { it.reduce(state, action) }) }
+    }
+
+    override fun intercept(interceptor: (R, Any, Action) -> Boolean): CombinedReducerFactory<R> {
+        this.interceptor = interceptor
+        return this
     }
 
     override fun initialState(): R = factory.construct(factories.map { it.initialState() as Any })
