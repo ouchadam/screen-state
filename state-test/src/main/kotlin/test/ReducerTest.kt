@@ -3,75 +3,76 @@ package test
 import app.dapk.state.Action
 import app.dapk.state.Reducer
 import app.dapk.state.ReducerFactory
+import app.dapk.state.StoreExtension
 import app.dapk.state.StoreScope
-import fake.FakeEventSource
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.amshove.kluent.internal.assertEquals
 import org.amshove.kluent.shouldBeEqualTo
 import state.ExpectTest
 import state.ExpectTestScope
 
-interface ReducerTest<S, E> {
-    operator fun invoke(block: suspend ReducerTestScope<S, E>.() -> Unit)
+fun interface ReducerTest<S> {
+    operator fun invoke(block: suspend ReducerTestScope<S>.() -> Unit)
 }
 
-fun <S, E> testReducer(block: ((E) -> Unit) -> ReducerFactory<S>): ReducerTest<S, E> {
-    val fakeEventSource = FakeEventSource<E>()
-    val reducerFactory = block(fakeEventSource)
-    return object : ReducerTest<S, E> {
-        override fun invoke(block: suspend ReducerTestScope<S, E>.() -> Unit) {
-            runReducerTest(reducerFactory, fakeEventSource, block)
-        }
-    }
+fun <S> testReducer(
+    vararg extensions: StoreExtension.Factory<S>,
+    factory: () -> ReducerFactory<S>
+): ReducerTest<S> {
+    val reducerFactory = factory()
+    return ReducerTest { block -> runReducerTest(reducerFactory, extensions.toList(), block) }
 }
 
-fun <S, E> runReducerTest(reducerFactory: ReducerFactory<S>, fakeEventSource: FakeEventSource<E>, block: suspend ReducerTestScope<S, E>.() -> Unit) {
-    runTest {
+@OptIn(ExperimentalCoroutinesApi::class)
+fun <S> runReducerTest(
+    reducerFactory: ReducerFactory<S>,
+    extensions: List<StoreExtension.Factory<S>>,
+    block: suspend ReducerTestScope<S>.() -> Unit
+) {
+    runTest(context = UnconfinedTestDispatcher()) {
         val expectTestScope = ExpectTest(coroutineContext)
-        block(ReducerTestScope(reducerFactory, fakeEventSource, expectTestScope))
+        block(ReducerTestScope(reducerFactory, expectTestScope, extensions))
         expectTestScope.verifyExpects()
     }
 }
 
-class ReducerTestScope<S, E>(
+class ReducerTestScope<S>(
     private val reducerFactory: ReducerFactory<S>,
-    private val fakeEventSource: FakeEventSource<E>,
-    private val expectTestScope: ExpectTestScope
-) : ExpectTestScope by expectTestScope, Reducer<S> {
+    private val expectTestScope: ExpectTestScope,
+    extensions: List<StoreExtension.Factory<S>>
+) : ExpectTestScope by expectTestScope {
 
-    private var invalidateCapturedState: Boolean = false
-    private val actionSideEffects = mutableMapOf<Action, () -> S>()
     private var manualState: S? = null
     private var capturedResult: S? = null
 
     private val actionCaptures = mutableListOf<Action>()
+
     private val reducerScope = object : StoreScope<S> {
         override fun dispatch(action: Action) {
             actionCaptures.add(action)
-
-            if (actionSideEffects.containsKey(action)) {
-                setState(actionSideEffects.getValue(action).invoke(), invalidateCapturedState = true)
-            }
         }
 
         override fun getState() = manualState ?: reducerFactory.initialState()
     }
-    private val reducer: Reducer<S> = reducerFactory.create(reducerScope, emptyList())
 
-    override fun reduce(state: S, action: Action): S {
-        return reducer.reduce(state, action).also {
-            capturedResult = if (invalidateCapturedState) manualState else it
-        }
+    private val reducer: Reducer<S> = reducerFactory.create(
+        reducerScope,
+        extensions.map { it.create(reducerScope) }
+    )
+
+    fun reduce(actionProvider: StoreScope<S>.() -> Unit): S {
+        val actionToExecute: Action = action(actionProvider)
+        return reduce(actionToExecute)
     }
 
-
-    fun actionSideEffect(action: Action, handler: () -> S) {
-        actionSideEffects[action] = handler
+    fun reduce(action: Action) = reducer.reduce(reducerScope.getState(), action).also {
+        capturedResult = it
     }
 
-    fun setState(state: S, invalidateCapturedState: Boolean = false) {
+    fun setState(state: S) {
         manualState = state
-        this.invalidateCapturedState = invalidateCapturedState
     }
 
     fun setState(block: (S) -> S) {
@@ -82,28 +83,22 @@ class ReducerTestScope<S, E>(
         reducerFactory.initialState() shouldBeEqualTo expected
     }
 
-    fun assertEvents(events: List<E>) {
-        fakeEventSource.assertEvents(events)
-    }
-
     fun assertOnlyStateChange(expected: S) {
         assertStateChange(expected)
         assertNoDispatches()
-        fakeEventSource.assertNoEvents()
     }
 
     fun assertOnlyStateChange(block: (S) -> S) {
         val expected = block(reducerScope.getState())
         assertStateChange(expected)
         assertNoDispatches()
-        fakeEventSource.assertNoEvents()
     }
 
     fun assertStateChange(expected: S) {
         capturedResult shouldBeEqualTo expected
     }
 
-    fun assertStateChange(block: (S) -> S) {
+    fun assertStateUpdate(block: (S) -> S) {
         val expected = block(reducerScope.getState())
         assertStateChange(expected)
     }
@@ -120,41 +115,37 @@ class ReducerTestScope<S, E>(
         assertEquals(reducerScope.getState(), capturedResult)
     }
 
-    fun assertNoEvents() {
-        fakeEventSource.assertNoEvents()
-    }
-
     fun assertOnlyDispatches(expected: List<Action>) {
         assertDispatches(expected)
-        fakeEventSource.assertNoEvents()
-        assertNoStateChange()
-    }
-
-    fun assertOnlyEvents(events: List<E>) {
-        fakeEventSource.assertEvents(events)
-        assertNoDispatches()
         assertNoStateChange()
     }
 
     fun assertNoChanges() {
         assertNoStateChange()
-        assertNoEvents()
         assertNoDispatches()
+    }
+
+    fun action(block: StoreScope<S>.() -> Unit): Action {
+        var actionToExecute: Action? = null
+        val collectingScope = object : StoreScope<S> {
+            override fun dispatch(action: Action) {
+                when (actionToExecute) {
+                    null -> actionToExecute = action
+                    else -> error("Can only be called once")
+                }
+            }
+
+            override fun getState() = error("should not be used!")
+        }
+        block(collectingScope)
+        return actionToExecute!!
     }
 }
 
-fun <S, E> ReducerTestScope<S, E>.assertOnlyDispatches(vararg action: Action) {
+fun <S, E> ReducerTestScope<S>.assertOnlyDispatches(vararg action: Action) {
     this.assertOnlyDispatches(action.toList())
 }
 
-fun <S, E> ReducerTestScope<S, E>.assertDispatches(vararg action: Action) {
+fun <S> ReducerTestScope<S>.assertDispatches(vararg action: Action) {
     this.assertDispatches(action.toList())
-}
-
-fun <S, E> ReducerTestScope<S, E>.assertEvents(vararg event: E) {
-    this.assertEvents(event.toList())
-}
-
-fun <S, E> ReducerTestScope<S, E>.assertOnlyEvents(vararg event: E) {
-    this.assertOnlyEvents(event.toList())
 }

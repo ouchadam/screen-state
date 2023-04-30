@@ -35,7 +35,7 @@ sealed interface Route {
 val pageReducer = createPageReducer(
     initialRoute = Route.PageOne,
     router = Route.router,
-    reducerFactory = CombinePageMap.fromReducers(
+    contentReducer = CombinePageMap.fromReducers(
         pageOne = createReducer(PageOne("")) {
             start { _, _ -> update { content("started!") } }
         },

@@ -7,22 +7,20 @@ import java.util.*
 
 class Database {
 
-    private data class MutableString(var content: String = randomUUID())
+    private data class MutableString(var content: String = "0")
 
     fun observe(): Flow<List<String>> {
         return flow {
-            val content = (0..4).map { MutableString() }
+            val content = (0..3).map { MutableString() }
             repeat(4) {
-                content.random().randomise()
+                content[it].setValue(it + 1)
                 emit(content.map { it.content })
-                delay(1000)
+                delay(100)
             }
         }
     }
 
-    private fun MutableString.randomise() {
-        content = randomUUID()
+    private fun MutableString.setValue(index: Int) {
+        content = index.toString()
     }
 }
-
-private fun randomUUID() = UUID.randomUUID().toString().substring(0, 4)

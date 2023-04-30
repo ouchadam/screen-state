@@ -22,6 +22,11 @@ class StateViewModel<S, E>(
     override val events: Flow<E> = eventSource
     override val current
         get() = _state!!
+
+    override fun subscribe(subscriber: (S) -> Unit) {
+        TODO("Not yet implemented")
+    }
+
     private var _state: S by mutableStateOf(store.getState())
 
     init {
@@ -34,6 +39,8 @@ class StateViewModel<S, E>(
     override fun dispatch(action: Action) {
         store.dispatch(action)
     }
+
+    override fun getState() = current
 }
 
 fun <S, E> createStateViewModel(block: (suspend (E) -> Unit) -> ReducerFactory<S>): StateViewModel<S, E> {
@@ -42,8 +49,7 @@ fun <S, E> createStateViewModel(block: (suspend (E) -> Unit) -> ReducerFactory<S
     return StateViewModel(reducer, eventSource)
 }
 
-interface State<S, E> {
-    fun dispatch(action: Action)
+interface State<S, E>: Store<S> {
     val events: Flow<E>
     val current: S
 }

@@ -8,13 +8,13 @@ fun interface Router<R, C> {
     fun route(route: R, content: C): Any
 }
 
-fun <R, C> createPageReducer(initialRoute: R, router: Router<R, C>, reducerFactory: CombinedReducerFactory<C>): ReducerFactory<Page<C, R>> {
+fun <R, C> createPageReducer(initialRoute: R, router: Router<R, C>, contentReducer: CombinedReducerFactory<C>): ReducerFactory<Page<C, R>> {
     val (routeContainerReducer, getState) = createReducer(RouteContainer(initialRoute)) {
         updateRoute { _, updateRoute -> update { route(updateRoute.route as R) } }
     }.share()
 
     return CombinePage.fromReducers(
-        content = reducerFactory
+        content = contentReducer
             .intercept { state, childState, _ -> (router.route(getState().route, state)::class != childState::class) },
         routeContainer = routeContainerReducer
     )

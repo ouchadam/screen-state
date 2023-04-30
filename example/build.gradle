@@ -15,6 +15,9 @@ dependencies {
     implementation project(":thunk")
     implementation libs.kotlin.coroutines
 
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation project(":state-test")
+
     ksp project(":plugin")
     ksp project(":thunk")
 }

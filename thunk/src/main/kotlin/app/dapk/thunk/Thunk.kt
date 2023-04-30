@@ -10,8 +10,10 @@ import app.dapk.state.StoreScope
 import app.dapk.state.StoreExtension
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlin.reflect.KClass
 
 fun <S> thunk(coroutineScope: CoroutineScope) = StoreExtension.Factory<S> { scope ->
@@ -51,14 +53,13 @@ private class ThunkExecutor<S>(
     }
 }
 
-private fun <S> createThunkContext(coroutineScope: CoroutineScope, scope: StoreScope<S>) = object : ThunkExecutionContext<S> {
-    override fun register(update: Update<S>) = dispatch(ThunkUpdate(update))
-    override fun dispatch(action: Action) = scope.dispatch(action)
-    override fun getState(): S = scope.getState()
-    override fun <T> Flow<T>.launchInThunk() {
-        launchIn(coroutineScope)
+private fun <S> createThunkContext(coroutineScope: CoroutineScope, scope: StoreScope<S>)
+    = object : ThunkExecutionContext<S>, StoreScope<S> by scope {
+        override fun register(update: Update<S>) = dispatch(ThunkUpdate(update))
+        override fun <T> Flow<T>.launchInThunk() {
+            launchIn(coroutineScope)
+        }
     }
-}
 
 private data class ThunkExec<S>(private val key: String, private val value: suspend ThunkExecutionContext<S>.() -> Unit) : Execution<S> {
     @Suppress("UNCHECKED_CAST")
