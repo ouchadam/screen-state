@@ -4,21 +4,27 @@ import app.dapk.PageMap.*
 import app.dapk.annotation.CombinedState
 import app.dapk.annotation.State
 import app.dapk.annotation.StateActions
-import app.dapk.gen.PageMapProxy
-import app.dapk.gen.changePage
-import app.dapk.gen.start
-import app.dapk.gen.update
-import app.dapk.state.ReducerFactory
+import app.dapk.state.Router
+import app.dapk.state.createPageReducer
 import app.dapk.state.createReducer
-import app.dapk.state.outer
 
-@CombinedState(actions = [Actions::class], commonActions = [LifecycleActions::class])
+@CombinedState(commonActions = [LifecycleActions::class])
 sealed interface PageMap {
     @State data class PageOne(val content: String) : PageMap
     @State data class PageTwo(val content: String) : PageMap
+}
 
-    @StateActions interface Actions {
-        fun changePage(key: String)
+sealed interface Route {
+    object PageOne : Route
+    object PageTwo : Route
+
+    companion object {
+        val router = Router<Route, PageMapProxy> { route, state ->
+            when (route) {
+                PageOne -> state.pageOne
+                PageTwo -> state.pageTwo
+            }
+        }
     }
 }
 
@@ -26,20 +32,15 @@ sealed interface PageMap {
     fun start()
 }
 
-fun createPageReducer(): ReducerFactory<PageMapProxy> {
-    var currentPage = "pageOne"
-    return app.dapk.gen.PageMap.fromReducers(
+val pageReducer = createPageReducer(
+    initialRoute = Route.PageOne,
+    router = Route.router,
+    reducerFactory = CombinePageMap.fromReducers(
         pageOne = createReducer(PageOne("")) {
-            accept { currentPage == "pageOne" }
             start { _, _ -> update { content("started!") } }
         },
         pageTwo = createReducer(PageTwo("")) {
-            accept { currentPage == "pageTwo" }
             start { _, _ -> update { content("started!") } }
         }
-    ).outer {
-        changePage { _, changePage ->
-            currentPage = changePage.key
-        }
-    }
-}
+    )
+)

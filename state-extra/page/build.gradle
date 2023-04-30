@@ -1,0 +1,9 @@
+plugins {
+    id "kotlin"
+    id "com.google.devtools.ksp"
+}
+
+dependencies {
+    implementation project(":state-v2")
+    ksp project(":plugin")
+}

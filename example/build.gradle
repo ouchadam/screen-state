@@ -10,8 +10,11 @@ application {
 
 dependencies {
     implementation project(":state-v2")
+    implementation project(":state-extra:page")
+
     implementation project(":thunk")
     implementation libs.kotlin.coroutines
+
     ksp project(":plugin")
     ksp project(":thunk")
 }

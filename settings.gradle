@@ -24,4 +24,6 @@ include ':common'
 include ':state-android'
 include ':state-test'
 
+include ':state-extra:page'
+
 include ':screen-android'

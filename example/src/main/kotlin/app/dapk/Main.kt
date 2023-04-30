@@ -1,5 +1,9 @@
 package app.dapk
 
+import app.dapk.Route.*
+import app.dapk.state.Page
+import app.dapk.state.Store
+import app.dapk.state.actions
 import app.dapk.state.createStore
 import app.dapk.thunk.thunk
 import kotlinx.coroutines.runBlocking
@@ -9,6 +13,17 @@ fun main() {
     combineExample()
     sealedCombineExample()
     todoExample()
+    pageExample()
+}
+
+private fun pageExample() {
+    val store = createStore(pageReducer)
+    store.subscribe { println("result: $it") }
+    (store as Store<PageMapProxy>).pageMapProxy.run {
+        start()
+        (store as Store<Page<*, *>>).actions.routeContainer.updateRoute(PageTwo)
+        start()
+    }
 }
 
 private fun asyncExample() = runBlocking {

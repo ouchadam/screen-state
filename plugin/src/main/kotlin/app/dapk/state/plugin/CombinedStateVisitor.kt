@@ -56,7 +56,6 @@ internal class CombinedStateVisitor(
                     listOf(
                         generateCombinedObject(objectNamespace, combinedAnnotation, actionClasses, parameters),
                         generateActionExtensions(
-                            domainType,
                             ClassName(combinedAnnotation.annotationRep.packageName, objectNamespace),
                             combinedAnnotation,
                             actionClasses,
@@ -78,6 +77,8 @@ internal class CombinedStateVisitor(
             ClassKind.INTERFACE -> {
                 val sealedSubclasses = classDeclaration.getSealedSubclasses()
                 val combinedAnnotation = classDeclaration.parseCombinedAnnotation()
+
+                logger.warn("!!! annotation: ${classDeclaration.parentDeclaration}")
 
                 if (!sealedSubclasses.iterator().hasNext()) {
                     logger.error("Expected sealed interface with subclasses")
@@ -105,7 +106,7 @@ internal class CombinedStateVisitor(
 
 
                     kspContext.createFile(
-                        packageName = classDeclaration.packageName.asString(),
+                        packageName = combinedAnnotation.annotationRep.packageName,
                         fileName = "${className}CombinedGenerated"
                     ) {
                         val objectNamespace = "Combine${className}"
@@ -114,7 +115,6 @@ internal class CombinedStateVisitor(
                             generateProxy(proxy, parameters),
                             generateCombinedObject(objectNamespace, proxyCombined, actionClasses, parameters),
                             generateActionExtensions(
-                                proxy,
                                 ClassName(classDeclaration.packageName.asString(), objectNamespace),
                                 proxyCombined,
                                 actionClasses,
@@ -147,7 +147,6 @@ private fun generateProxy(proxyName: ClassName, parameters: List<Prop>): Writeab
 }
 
 private fun generateActionExtensions(
-    stateType: ClassName,
     objectNamespace: ClassName,
     combinedRep: CombinedRep,
     parameters: List<AnnotationRep>,
