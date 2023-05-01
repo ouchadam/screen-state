@@ -16,9 +16,7 @@ class ThunkPluginExtension : Plugin {
 
     override fun run(logger: KSPLogger, representation: AnnotationRep): Writeable {
         logger.warn("hello from extension")
-        return if (representation.isObject) {
-            Writeable {  }
-        } else {
+        return if (representation.canBeUpdated()) {
             val receiver = representation.createTypeName("${representation.simpleName()}Updater")
             val receiverImpl = representation.createTypeName("${representation.simpleName()}UpdaterImpl")
             Writeable {
@@ -32,6 +30,8 @@ class ThunkPluginExtension : Plugin {
                     .build()
                     .toString()
             }
+        } else {
+            Writeable {  }
         }
     }
 }

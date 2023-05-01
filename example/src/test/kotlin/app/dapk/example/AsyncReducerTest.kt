@@ -1,15 +1,10 @@
-package app.dapk
+package app.dapk.example
 
-import kotlinx.coroutines.CancellableContinuation
-import kotlinx.coroutines.CoroutineDispatcher
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Delay
-import kotlinx.coroutines.InternalCoroutinesApi
-import kotlinx.coroutines.Runnable
+import app.dapk.examples.AsyncState
+import app.dapk.examples.asyncReducer
+import app.dapk.examples.asyncState
 import org.junit.*
 import test.testReducer
-import kotlin.coroutines.CoroutineContext
-import kotlin.coroutines.resume
 
 class AsyncReducerTest {
 

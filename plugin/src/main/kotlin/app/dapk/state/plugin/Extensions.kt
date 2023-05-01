@@ -21,7 +21,6 @@ import com.google.devtools.ksp.symbol.Modifier
 import com.squareup.kotlinpoet.ClassName
 import com.squareup.kotlinpoet.FunSpec
 import com.squareup.kotlinpoet.KModifier
-import com.squareup.kotlinpoet.KModifier.*
 import com.squareup.kotlinpoet.ParameterSpec
 import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
 import com.squareup.kotlinpoet.PropertySpec
@@ -40,17 +39,18 @@ fun KSClassDeclaration.parseStateAnnotation(): AnnotationRep {
     val parentDeclaration = this.parentDeclaration?.let { it as? KSClassDeclaration }
 
     return AnnotationRep(
+        declaration = this,
         domainClass = this.typedName(),
         domainName = domainType,
         types = this.typeParameters,
         visibility = this.getVisibility(),
         parentDeclaration = parentDeclaration,
-        isObject = this.classKind == ClassKind.OBJECT,
         actions = annotation.parseActionsArgument("actions")?.plus(
             parentDeclaration?.parseCombinedAnnotation()?.commonActions ?: emptyList()
         ),
+        isObject = this.classKind == ClassKind.OBJECT,
         isValueClass = this.isValueClass(),
-        isProxy = this.getSealedSubclasses().iterator().hasNext()
+        isProxy = false,
     )
 }
 
@@ -73,6 +73,7 @@ fun KSClassDeclaration.parseCombinedAnnotation(): CombinedRep {
     val domainType = this.toClassName()
     return CombinedRep(
         AnnotationRep(
+            declaration = this,
             domainClass = this.typedName(),
             domainName = domainType,
             types = this.typeParameters,

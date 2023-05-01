@@ -22,6 +22,7 @@ import com.google.devtools.ksp.symbol.KSName
 import com.google.devtools.ksp.symbol.KSType
 import com.google.devtools.ksp.symbol.KSVisitor
 import com.google.devtools.ksp.symbol.KSVisitorVoid
+import com.google.devtools.ksp.symbol.Modifier
 import com.google.devtools.ksp.validate
 import com.squareup.kotlinpoet.ClassName
 import com.squareup.kotlinpoet.CodeBlock
@@ -121,6 +122,24 @@ internal class StateVisitor(
                 )
             }
 
+            INTERFACE -> {
+
+                when {
+                    classDeclaration.modifiers.contains(Modifier.SEALED) -> {
+                        processStateLike(
+                            kspContext,
+                            classDeclaration,
+                            classDeclaration.parseStateAnnotation(),
+                            logger,
+                            plugins
+                        )
+                    }
+                    else -> {
+                        logger.error("Unexpected annotation class: ${classDeclaration.classKind}")
+                    }
+                }
+            }
+
             else -> {
                 logger.error("Unexpected annotation class: ${classDeclaration.classKind}")
             }
@@ -150,7 +169,7 @@ fun processStateLike(
 ) {
     kspContext.createFile(packageName = stateLike.packageName, fileName = "${stateLike.simpleName()}Generated") {
         buildList {
-            if (!stateLike.isObject) {
+            if (stateLike.canBeUpdated()) {
                 addAll(generateUpdateFunctions(stateLike, parameters, logger))
             }
             addAll(generateExtensions(stateLike, logger))

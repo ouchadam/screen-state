@@ -11,6 +11,7 @@ import app.dapk.examples.pageMapProxy
 import app.dapk.examples.pageReducer
 import app.dapk.examples.sealedAllStateProxy
 import app.dapk.examples.sealedCombinedReducer
+import app.dapk.examples.sealedStateReducer
 import app.dapk.examples.todoReducer
 import app.dapk.examples.todoState
 import app.dapk.examples.valueClassReducer
@@ -26,10 +27,10 @@ fun main() {
     asyncExample()
     combineExample()
     sealedCombineExample()
+    sealedStateExample()
     todoExample()
     pageExample()
 }
-
 
 private fun valueClassExample() {
     val store = createStore(valueClassReducer)
@@ -78,6 +79,12 @@ private fun sealedCombineExample() {
         stateFour.updateContent("content 2")
     }
     store.sealedAllStateProxy.randomize()
+}
+
+private fun sealedStateExample() {
+    val store = createStore(sealedStateReducer)
+    store.subscribe { println("result: $it") }
+    store.actions.payload.load()
 }
 
 private fun todoExample() {

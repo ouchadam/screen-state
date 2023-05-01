@@ -1,9 +1,11 @@
 package app.dapk.state.plugin
 
+import com.google.devtools.ksp.symbol.ClassKind.*
 import com.google.devtools.ksp.symbol.KSClassDeclaration
 import com.google.devtools.ksp.symbol.KSType
 import com.google.devtools.ksp.symbol.KSTypeParameter
 import com.google.devtools.ksp.symbol.KSValueParameter
+import com.google.devtools.ksp.symbol.Modifier
 import com.google.devtools.ksp.symbol.Visibility
 import com.squareup.kotlinpoet.ClassName
 import com.squareup.kotlinpoet.KModifier
@@ -17,10 +19,10 @@ import com.squareup.kotlinpoet.ksp.toClassName
 import com.squareup.kotlinpoet.ksp.toKModifier
 import com.squareup.kotlinpoet.ksp.toTypeName
 import com.squareup.kotlinpoet.ksp.toTypeParameterResolver
-import java.lang.annotation.Inherited
 import kotlin.reflect.KClass
 
 data class AnnotationRep(
+    private val declaration: KSClassDeclaration,
     val domainClass: TypeName,
     private val domainName: ClassName,
     val types: List<KSTypeParameter>,
@@ -92,6 +94,10 @@ data class AnnotationRep(
     private fun starProjected() = when (isTyped()) {
         true -> domainName.parameterizedBy(types.map { STAR })
         false -> domainName
+    }
+
+    fun canBeUpdated(): Boolean {
+        return isProxy || (declaration.classKind == CLASS && !declaration.modifiers.contains(Modifier.SEALED))
     }
 }
 

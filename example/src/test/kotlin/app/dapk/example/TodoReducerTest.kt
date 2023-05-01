@@ -1,5 +1,9 @@
-package app.dapk
+package app.dapk.example
 
+import app.dapk.examples.Todo
+import app.dapk.examples.TodoState
+import app.dapk.examples.todoReducer
+import app.dapk.examples.todoState
 import org.junit.*
 import test.testReducer
 

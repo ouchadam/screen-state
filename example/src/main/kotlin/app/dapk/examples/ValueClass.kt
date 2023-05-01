@@ -5,9 +5,7 @@ import app.dapk.state.createReducer
 
 @State
 @JvmInline
-value class IdContainer(val value: Id) {
-
-}
+value class IdContainer(val value: Id)
 
 sealed interface Id {
     object First: Id
