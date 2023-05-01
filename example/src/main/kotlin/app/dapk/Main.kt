@@ -1,6 +1,19 @@
 package app.dapk
 
-import app.dapk.Route.*
+import app.dapk.examples.Route.*
+import app.dapk.examples.PageMapProxy
+import app.dapk.examples.actions
+import app.dapk.examples.allState
+import app.dapk.examples.asyncReducer
+import app.dapk.examples.asyncState
+import app.dapk.examples.combinedReducer
+import app.dapk.examples.pageMapProxy
+import app.dapk.examples.pageReducer
+import app.dapk.examples.sealedAllStateProxy
+import app.dapk.examples.sealedCombinedReducer
+import app.dapk.examples.todoReducer
+import app.dapk.examples.todoState
+import app.dapk.examples.valueClassReducer
 import app.dapk.state.Page
 import app.dapk.state.Store
 import app.dapk.state.actions
@@ -9,11 +22,18 @@ import app.dapk.thunk.thunk
 import kotlinx.coroutines.runBlocking
 
 fun main() {
+    valueClassExample()
     asyncExample()
     combineExample()
     sealedCombineExample()
     todoExample()
     pageExample()
+}
+
+
+private fun valueClassExample() {
+    val store = createStore(valueClassReducer)
+    store.subscribe { println("result: $it") }
 }
 
 private fun pageExample() {

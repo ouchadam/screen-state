@@ -1,6 +1,6 @@
-package app.dapk
+package app.dapk.examples
 
-import app.dapk.TodoState.*
+import app.dapk.examples.TodoState.*
 import app.dapk.annotation.State
 import app.dapk.annotation.StateActions
 import app.dapk.state.createReducer

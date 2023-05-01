@@ -43,7 +43,9 @@ internal class CombinedStateVisitor(
                     val actionClasses = parameters.mapNotNull { param ->
                         logger.warn("!!!! : ${param.type}")
                         when (val declaration = param.type.declaration) {
-                            is KSClassDeclaration -> declaration.parseStateAnnotation()
+                            is KSClassDeclaration -> {
+                                runCatching { declaration.parseStateAnnotation() }.getOrNull()
+                            }
                             else -> {
                                 logger.warn("Unknown type: $declaration")
                                 null

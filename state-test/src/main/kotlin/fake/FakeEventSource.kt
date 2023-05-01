@@ -18,3 +18,5 @@ class FakeEventSource<E> : (E) -> Unit {
         assertEquals(emptyList(), captures)
     }
 }
+
+fun <E> FakeEventSource<E>.assertEvents(vararg events: E) = this.assertEvents(events.toList())

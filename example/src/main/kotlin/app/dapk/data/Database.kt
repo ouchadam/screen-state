@@ -1,4 +1,4 @@
-package app.dapk
+package app.dapk.data
 
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow

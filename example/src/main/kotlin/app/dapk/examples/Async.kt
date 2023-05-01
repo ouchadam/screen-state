@@ -1,7 +1,8 @@
-package app.dapk
+package app.dapk.examples
 
 import app.dapk.annotation.State
 import app.dapk.annotation.StateActions
+import app.dapk.data.Database
 import app.dapk.state.createReducer
 import app.dapk.thunk.thunk
 import kotlinx.coroutines.flow.onEach
@@ -14,7 +15,6 @@ data class AsyncState(
 ) {
     @StateActions interface Actions {
         fun observeChanges()
-        fun updateContent(content: List<String>)
     }
 }
 
@@ -22,12 +22,8 @@ val asyncReducer = createReducer(initialState = AsyncState(content = emptyList()
     observeChanges { _, _ ->
         thunk {
             database.observe()
-                .onEach { asyncState.updateContent(it) }
+                .onEach { thunkUpdate { content(it) } }
                 .launchInThunk()
         }
-    }
-
-    updateContent { _, payload ->
-        update { content(payload.content) }
     }
 }

@@ -265,8 +265,40 @@ private fun generateUpdateFunctions(
     val collectCopyBlock = CodeBlock.builder()
         .add("return ${Update::class.asTypeName().canonicalName} { from ->\n")
         .indent()
-        .add("from.copy(")
-        .indent()
+        .add(
+            when {
+                stateLike.isValueClass -> {
+                    val propertyName = prop.first().name.getShortName().decapitalize()
+                    CodeBlock.builder().add(
+                        """
+                        ${stateLike.qualifiedName}(_$propertyName ?: from.$propertyName)
+                    """.trimIndent()
+                    ).build()
+                }
+                else -> {
+                    CodeBlock.builder()
+                        .add("from.copy(")
+                        .indent()
+                        .apply {
+                            prop.forEach {
+                                val propertyName = it.name.getShortName().decapitalize()
+                                if (it.type.isMarkedNullable) {
+                                    add("\n")
+                                    add("$propertyName = if (nullable_${propertyName}_set) _$propertyName else from.$propertyName,")
+                                } else {
+                                    add("\n")
+                                    add("$propertyName = _$propertyName ?: from.$propertyName,")
+                                }
+                            }
+                            add("\n)")
+                        }
+                        .unindent()
+                        .build()
+                }
+            }
+        )
+    collectCopyBlock.unindent()
+    collectCopyBlock.add("\n}")
 
     prop.forEach {
         val propertyName = it.name.getShortName().decapitalize()
@@ -306,20 +338,8 @@ private fun generateUpdateFunctions(
             .addCode("_${propertyName} = $propertyName")
 
         internalUpdateApi.addFunction(implFun.build())
-
-        if (it.type.isMarkedNullable) {
-            collectCopyBlock.add("\n")
-            collectCopyBlock.add("$propertyName = if (nullable_${propertyName}_set) _$propertyName else from.$propertyName,")
-        } else {
-            collectCopyBlock.add("\n")
-            collectCopyBlock.add("$propertyName = _$propertyName ?: from.$propertyName,")
-        }
     }
 
-    collectCopyBlock.unindent()
-    collectCopyBlock.add("\n)\n")
-    collectCopyBlock.unindent()
-    collectCopyBlock.add("}")
 
     collectBuilder.addCode(collectCopyBlock.build())
     internalUpdateApi.addFunction(collectBuilder.build())

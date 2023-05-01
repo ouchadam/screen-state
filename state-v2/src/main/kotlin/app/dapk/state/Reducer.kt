@@ -60,9 +60,9 @@ fun <S: Any> ReducerFactory<S>.outer(builder: ReducerBuilder<S>.() -> Unit): Red
     }
 }
 
-fun <S: Any> ReducerFactory<S>.share(): Pair<ReducerFactory<S>, () -> S> {
+fun <S: Any> ReducerFactory<S>.share(): Pair<ReducerFactory<S>, () -> StoreScope<S>> {
     var _scope: StoreScope<S>? = null
-    val lateScope: () -> S = { _scope!!.getState() }
+    val lateScope: () -> StoreScope<S> = { _scope!! }
 
     val sharedReducer = object : ReducerFactory<S> {
         override fun create(scope: StoreScope<S>, extensions: List<StoreExtension>): Reducer<S> {

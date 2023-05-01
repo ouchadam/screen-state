@@ -1,9 +1,9 @@
-package app.dapk
+package app.dapk.examples
 
-import app.dapk.PageMap.*
 import app.dapk.annotation.CombinedState
 import app.dapk.annotation.State
 import app.dapk.annotation.StateActions
+import app.dapk.examples.PageMap.*
 import app.dapk.state.Router
 import app.dapk.state.createPageReducer
 import app.dapk.state.createReducer
@@ -19,7 +19,7 @@ sealed interface Route {
     object PageTwo : Route
 
     companion object {
-        val router = Router<Route, PageMapProxy> { route, state ->
+        val router = Router<Route, PageMapProxy, PageMap> { route, state ->
             when (route) {
                 PageOne -> state.pageOne
                 PageTwo -> state.pageTwo

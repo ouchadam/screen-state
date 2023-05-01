@@ -5,6 +5,7 @@ plugins {
 
 dependencies {
     implementation project(":state-v2")
+    implementation project(":thunk")
     implementation libs.kotlin.coroutines
     implementation libs.kluent
     implementation libs.mockk

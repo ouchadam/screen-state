@@ -28,6 +28,7 @@ data class AnnotationRep(
     val parentDeclaration: KSClassDeclaration?,
     val actions: List<ActionRep>?,
     val isObject: Boolean,
+    val isValueClass: Boolean,
     val isProxy: Boolean,
 ) {
 

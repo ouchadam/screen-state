@@ -1,4 +1,4 @@
-package app.dapk
+package app.dapk.examples
 
 import app.dapk.annotation.CombinedState
 import app.dapk.annotation.State

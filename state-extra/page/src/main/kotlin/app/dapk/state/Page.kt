@@ -4,18 +4,18 @@ import app.dapk.annotation.CombinedState
 import app.dapk.annotation.State
 import app.dapk.annotation.StateActions
 
-fun interface Router<R, C> {
-    fun route(route: R, content: C): Any
+fun interface Router<R, C, P: Any> {
+    fun route(route: R, content: C): P
 }
 
-fun <R, C> createPageReducer(initialRoute: R, router: Router<R, C>, contentReducer: CombinedReducerFactory<C>): ReducerFactory<Page<C, R>> {
-    val (routeContainerReducer, getState) = createReducer(RouteContainer(initialRoute)) {
+fun <R, C, P: Any> createPageReducer(initialRoute: R, router: Router<R, C, P>, contentReducer: CombinedReducerFactory<C>): ReducerFactory<Page<C, R>> {
+    val (routeContainerReducer, routeState) = createReducer(RouteContainer(initialRoute)) {
         updateRoute { _, updateRoute -> update { route(updateRoute.route as R) } }
     }.share()
 
     return CombinePage.fromReducers(
         content = contentReducer
-            .intercept { state, childState, _ -> (router.route(getState().route, state)::class != childState::class) },
+            .intercept { state, childState, _ -> (router.route(routeState().getState().route, state)::class != childState::class) },
         routeContainer = routeContainerReducer
     )
 }
@@ -35,3 +35,5 @@ data class RouteContainer<R>(val route: R) {
     }
 }
 
+fun <C, R> Store<Page<C, R>>.asPageContent() = this as Store<C>
+fun <C, R> Store<Page<C, R>>.asPage() = this as Store<Page<*, *>>

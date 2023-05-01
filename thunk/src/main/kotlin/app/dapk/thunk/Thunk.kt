@@ -1,6 +1,7 @@
 package app.dapk.thunk
 
 import app.dapk.internal.Update
+import app.dapk.internal.UpdateAction
 import app.dapk.internal.UpdateExec
 import app.dapk.internal.UpdateRegistrar
 import app.dapk.state.Action
@@ -35,7 +36,7 @@ fun <S> ExecutionRegistrar<S>.thunk(key: String? = null, block: suspend ThunkExe
     register(ThunkExec(key ?: name, block))
 }
 
-private data class ThunkUpdate<S>(val update: Update<S>) : Action
+private data class ThunkUpdate<S>(override val update: Update<S>) : UpdateAction<S>
 
 interface ThunkExecutionContext<S> : UpdateRegistrar<S>, StoreScope<S> {
     fun <T> Flow<T>.launchInThunk()

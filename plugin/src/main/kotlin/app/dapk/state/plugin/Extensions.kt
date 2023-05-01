@@ -1,9 +1,13 @@
+@file:OptIn(KspExperimental::class)
+
 package app.dapk.state.plugin
 
 import app.dapk.annotation.CombinedState
 import app.dapk.annotation.State
+import com.google.devtools.ksp.KspExperimental
 import com.google.devtools.ksp.getDeclaredFunctions
 import com.google.devtools.ksp.getVisibility
+import com.google.devtools.ksp.isAnnotationPresent
 import com.google.devtools.ksp.processing.CodeGenerator
 import com.google.devtools.ksp.processing.Dependencies
 import com.google.devtools.ksp.processing.Resolver
@@ -13,6 +17,7 @@ import com.google.devtools.ksp.symbol.KSClassDeclaration
 import com.google.devtools.ksp.symbol.KSDeclaration
 import com.google.devtools.ksp.symbol.KSType
 import com.google.devtools.ksp.symbol.KSTypeParameter
+import com.google.devtools.ksp.symbol.Modifier
 import com.squareup.kotlinpoet.ClassName
 import com.squareup.kotlinpoet.FunSpec
 import com.squareup.kotlinpoet.KModifier
@@ -44,8 +49,15 @@ fun KSClassDeclaration.parseStateAnnotation(): AnnotationRep {
         actions = annotation.parseActionsArgument("actions")?.plus(
             parentDeclaration?.parseCombinedAnnotation()?.commonActions ?: emptyList()
         ),
+        isValueClass = this.isValueClass(),
         isProxy = this.getSealedSubclasses().iterator().hasNext()
     )
+}
+
+private fun KSClassDeclaration.isValueClass(): Boolean {
+    return this.modifiers.contains(Modifier.VALUE) &&
+        this.primaryConstructor?.parameters?.size == 1 &&
+        this.isAnnotationPresent(JvmInline::class)
 }
 
 private fun KSClassDeclaration.typedName(): TypeName {
@@ -55,7 +67,6 @@ private fun KSClassDeclaration.typedName(): TypeName {
         false -> domainType.parameterizedBy(this.typeParameters.map { TypeVariableName(it.simpleName.asString()) })
     }
 }
-
 
 fun KSClassDeclaration.parseCombinedAnnotation(): CombinedRep {
     val annotation = this.annotations.first { it.shortName.asString() == CombinedState::class.simpleName }
@@ -69,6 +80,7 @@ fun KSClassDeclaration.parseCombinedAnnotation(): CombinedRep {
             parentDeclaration = this.parentDeclaration?.let { it as? KSClassDeclaration },
             isObject = this.classKind == ClassKind.OBJECT,
             actions = annotation.parseActionsArgument("actions"),
+            isValueClass = this.isValueClass(),
             isProxy = this.getSealedSubclasses().iterator().hasNext()
         ),
         commonActions = annotation.parseActionsArgument("commonActions")

@@ -1,28 +1,33 @@
 package test
 
+import app.dapk.internal.UpdateAction
 import app.dapk.state.Action
 import app.dapk.state.Reducer
 import app.dapk.state.ReducerFactory
 import app.dapk.state.StoreExtension
 import app.dapk.state.StoreScope
-import kotlinx.coroutines.ExperimentalCoroutinesApi
+import app.dapk.thunk.thunk
+import kotlinx.coroutines.*
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.amshove.kluent.internal.assertEquals
 import org.amshove.kluent.shouldBeEqualTo
 import state.ExpectTest
 import state.ExpectTestScope
+import java.lang.Runnable
+import kotlin.coroutines.CoroutineContext
+import kotlin.coroutines.resume
 
 fun interface ReducerTest<S> {
     operator fun invoke(block: suspend ReducerTestScope<S>.() -> Unit)
 }
 
 fun <S> testReducer(
-    vararg extensions: StoreExtension.Factory<S>,
+    extensions: List<StoreExtension.Factory<S>> = listOf(thunk(blockingScope())),
     factory: () -> ReducerFactory<S>
 ): ReducerTest<S> {
     val reducerFactory = factory()
-    return ReducerTest { block -> runReducerTest(reducerFactory, extensions.toList(), block) }
+    return ReducerTest { block -> runReducerTest(reducerFactory, extensions, block) }
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -140,12 +145,35 @@ class ReducerTestScope<S>(
         block(collectingScope)
         return actionToExecute!!
     }
+
+    fun assertUpdateActions(vararg expected: (S) -> S) {
+        actionCaptures.filterIsInstance<UpdateAction<S>>().resolve() shouldBeEqualTo expected.toList().accumulateState()
+    }
+
+    private fun List<(S) -> S>.accumulateState(): List<S> {
+        return this.fold(reducerScope.getState() to mutableListOf<S>()) { acc, current ->
+            current.invoke(acc.first).let {
+                it to (acc.second.plus(it).toMutableList())
+            }
+        }.second
+    }
+
+    @Suppress("SuspiciousCallableReferenceInLambda")
+    private fun List<UpdateAction<S>>.resolve(): List<S> {
+        return this.map { it.update::update }.accumulateState()
+    }
 }
 
-fun <S, E> ReducerTestScope<S>.assertOnlyDispatches(vararg action: Action) {
+fun <S> ReducerTestScope<S>.assertOnlyDispatches(vararg action: Action) {
     this.assertOnlyDispatches(action.toList())
 }
 
 fun <S> ReducerTestScope<S>.assertDispatches(vararg action: Action) {
     this.assertDispatches(action.toList())
 }
+
+@OptIn(InternalCoroutinesApi::class)
+private fun blockingScope() = CoroutineScope(object : CoroutineDispatcher(), Delay {
+    override fun dispatch(context: CoroutineContext, block: Runnable) = block.run()
+    override fun scheduleResumeAfterDelay(timeMillis: Long, continuation: CancellableContinuation<Unit>) = continuation.resume(Unit)
+})
