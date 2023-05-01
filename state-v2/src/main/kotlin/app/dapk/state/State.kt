@@ -9,7 +9,7 @@ fun interface Reducer<S> {
 
 interface Action
 
-fun <S : Any> createReducer(
+fun <S> createReducer(
     initialState: S,
     builder: ReducerBuilder<S>.() -> Unit = {},
 ): ReducerFactory<S> = createReducerFactory(initialState, builder)

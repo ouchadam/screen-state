@@ -235,7 +235,7 @@ private fun generateCombinedObject(
                                     """
                                     |return ${combinedRep.annotationRep.qualifiedName}(
                                     |  ${
-                                        parameters.mapIndexed { index, param -> "content[$index] as ${param.type.toQualifiedName()}" }
+                                        parameters.mapIndexed { index, param -> "content[$index] as ${combinedRep.annotationRep.resolveType(param.type)}" }
                                             .joinToString(",")
                                     }
                                     |)
