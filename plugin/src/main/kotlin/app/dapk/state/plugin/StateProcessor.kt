@@ -365,19 +365,6 @@ private fun generateUpdateFunctions(
 
     val internalBuild = internalUpdateApi.build()
 
-    val updateFun = stateLike.createFunction("update")
-        .returns(stateLike.asParameterOf(Update::class))
-        .addParameter(
-            "block",
-            LambdaTypeName.get(publicApiType, emptyList(), Unit::class.asTypeName())
-        )
-        .addCode(
-            """
-                return ${internalBuild.nameWithTypes()}().apply(block).collect()
-            """.trimIndent()
-        )
-        .build()
-
     logger.warn(internalBuild.toString())
 
     val receiver = stateLike.createTypeName("${stateLike.simpleName()}Updater")
@@ -395,7 +382,6 @@ private fun generateUpdateFunctions(
     return buildList {
         add(publicUpdateApi.build())
         add(internalBuild)
-        add(updateFun)
         addAll(executionExtensions)
     }.toWriteable()
 }
