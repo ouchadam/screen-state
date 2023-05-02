@@ -42,7 +42,7 @@ private fun pageExample() {
     store.subscribe { println("result: $it") }
     (store as Store<PageMapProxy>).pageMapProxy.run {
         start()
-        (store as Store<Page<*, *>>).actions.routeContainer.updateRoute(PageTwo)
+        (store as Store<Page<*, *>>).actions.routeContainer.updateRoute(PageTwo(""))
         start()
     }
 }

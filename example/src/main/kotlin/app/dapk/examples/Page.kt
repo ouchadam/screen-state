@@ -16,13 +16,13 @@ sealed interface PageMap {
 
 sealed interface Route {
     object PageOne : Route
-    object PageTwo : Route
+    data class PageTwo(val argument: String) : Route
 
     companion object {
         val router = Router<Route, PageMapProxy, PageMap> { route, state ->
             when (route) {
                 PageOne -> state.pageOne
-                PageTwo -> state.pageTwo
+                is PageTwo -> state.pageTwo
             }
         }
     }
@@ -35,12 +35,14 @@ sealed interface Route {
 val pageReducer = createPageReducer(
     initialRoute = Route.PageOne,
     router = Route.router,
-    contentReducer = CombinePageMap.fromReducers(
-        pageOne = createReducer(PageOne("")) {
-            start { _, _ -> update { content("started!") } }
-        },
-        pageTwo = createReducer(PageTwo("")) {
-            start { _, _ -> update { content("started!") } }
-        }
-    )
+    contentReducer = {
+        CombinePageMap.fromReducers(
+            pageOne = createReducer(PageOne("")) {
+                start { _, _ -> update { content("started!") } }
+            },
+            pageTwo = createReducer(PageTwo("")) {
+                start { _, _ -> update { content("started!") } }
+            }
+        )
+    }
 )

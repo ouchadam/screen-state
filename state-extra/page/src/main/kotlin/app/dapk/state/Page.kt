@@ -8,16 +8,37 @@ fun interface Router<R, C, P: Any> {
     fun route(route: R, content: C): P
 }
 
-fun <R, C, P: Any> createPageReducer(initialRoute: R, router: Router<R, C, P>, contentReducer: CombinedReducerFactory<C>): ReducerFactory<Page<C, R>> {
+fun <R: Any, C, P: Any> createPageReducer(
+    initialRoute: R,
+    router: Router<R, C, P>,
+    contentReducer: Routeable<R>.() -> CombinedReducerFactory<C>
+): ReducerFactory<Page<C, R>> {
     val (routeContainerReducer, routeState) = createReducer(RouteContainer(initialRoute)) {
-        updateRoute { _, updateRoute -> update { route(updateRoute.route as R) } }
+        updateRoute { _, updateRoute ->
+            update { route(updateRoute.route as R) }
+        }
     }.share()
 
+    val routeable = object : Routeable<R> {
+        private val lazyRouteState by lazy { routeState() }
+
+        override fun changeRoute(route: R) {
+            lazyRouteState.dispatch(GenRouteContainerActions.UpdateRoute(route as Any))
+        }
+
+        override fun currentRoute() = lazyRouteState.getState().route
+    }
+
     return CombinePage.fromReducers(
-        content = contentReducer
-            .intercept { state, childState, _ -> (router.route(routeState().getState().route, state)::class != childState::class) },
+        content = contentReducer(routeable)
+            .intercept { state, childState, _ -> (router.route(routeable.currentRoute(), state)::class != childState::class) },
         routeContainer = routeContainerReducer
     )
+}
+
+interface Routeable<R: Any> {
+    fun changeRoute(route: R)
+    fun currentRoute(): R
 }
 
 @CombinedState
@@ -27,8 +48,8 @@ data class Page<C, R>(
 )
 
 @State(actions = [RouteContainer.Actions::class])
-data class RouteContainer<R>(val route: R) {
-
+@JvmInline
+value class RouteContainer<R>(val route: R) {
     @StateActions
     interface Actions {
         fun updateRoute(route: Any)
